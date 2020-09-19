@@ -226,7 +226,7 @@ namespace svher {
     void LogFormatter::init() {
         // string format type
         std::vector<std::tuple<std::string, std::string, int>> vec;
-        std::string nstr ;
+        std::string nstr;
         for(size_t i = 0; i < m_pattern.size(); ++i) {
             if (m_pattern[i] != '%') {
                 nstr.append(1, m_pattern[i]);
@@ -317,6 +317,7 @@ namespace svher {
             } else {
                 auto it = s_format_items.find(std::get<0>(i));
                 if (it == s_format_items.end()) {
+                    m_error = true;
                     m_items.push_back(FormatItem::ptr(new StringFormatItem("<error_format %" + std::get<0>(i) + ">")));
                 }
                 else {
