@@ -131,7 +131,7 @@ namespace svher {
         virtual void log(std::shared_ptr<Logger> logger, LogLevel::Level level, LogEvent::ptr event) = 0;
 
         void setFormatter(LogFormatter::ptr val);
-        void setFormatter(const std::string& val);
+        bool setFormatter(const std::string& val);
         void setLevel(LogLevel::Level level) { m_level = level; }
         LogLevel::Level getLevel() const { return m_level; }
         LogFormatter::ptr getFormatter() const { return m_formatter; }

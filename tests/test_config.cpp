@@ -163,6 +163,11 @@ void test_log() {
     LOG_INFO(system_log) << "hello system";
     std::cout << "=================================" << std::endl;
     std::cout << svher::LoggerMgr::GetInstance()->toYamlString() << std::endl;
+    system_log->setFormatter("%d - %m%n");
+    std::cout << "=================================" << std::endl;
+    std::cout << svher::LoggerMgr::GetInstance()->toYamlString() << std::endl;
+    LOG_INFO(LOG_ROOT()) << "hello root";
+    LOG_INFO(system_log) << "hello system 2";
 }
 
 int main(int argc, char** argv) {

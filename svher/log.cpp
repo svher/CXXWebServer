@@ -476,7 +476,14 @@ namespace svher {
 
     void Logger::setFormatter(LogFormatter::ptr val) {
         m_formatter = val;
+
+        for (auto& i : m_appenders) {
+            if (!i->m_hasFormatter) {
+                i->m_formatter = m_formatter;
+            }
+        }
     }
+
     void Logger::setFormatter(const std::string& val) {
         LogFormatter::ptr new_val(new svher::LogFormatter(val));
         if (new_val->isError()) {
@@ -610,7 +617,9 @@ namespace svher {
                         ap->setLevel(a.level);
                         logger->addAppender(ap);
                         if (!a.formatter.empty()) {
-                            ap->setFormatter(a.formatter);
+                            if (!ap->setFormatter(a.formatter)) {
+                                std::cout << "appender name=" << i.name << " formatter=" << a.formatter << " is invalid" << std::endl;
+                            }
                         }
                     }
 
@@ -653,7 +662,12 @@ namespace svher {
             m_hasFormatter = false;
     }
 
-    void LogAppender::setFormatter(const std::string &val) {
-        setFormatter(LogFormatter::ptr(new LogFormatter(val)));
+    bool LogAppender::setFormatter(const std::string &val) {
+        LogFormatter::ptr ptr(new LogFormatter(val));
+        if (!ptr->isError()) {
+            setFormatter(ptr);
+            return true;
+        }
+        return false;
     }
 }
