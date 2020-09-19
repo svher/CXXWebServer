@@ -1,10 +1,9 @@
-#ifndef __SVHER_SINGLETON_H_
-#define __SVHER_SINGLETON_H_
+#pragma once
 
 #include <memory>
 
 namespace svher {
-    template <class T, class X = void, int N = 0>
+    template<class T, class X = void, int N = 0>
     class Singleton {
     public:
         static T* GetInstance() {
@@ -22,5 +21,3 @@ namespace svher {
         }
     };
 }
-
-#endif
