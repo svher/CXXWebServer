@@ -38,6 +38,7 @@
 #define LOG_FATAL_FORMAT(logger, fmt, ...) LOG_LEVEL_FORMAT(logger, svher::LogLevel::FATAL, __VA_ARGS__)
 
 #define LOG_ROOT() svher::LoggerMgr::GetInstance()->getRoot()
+#define LOG_NAME(name) svher::LoggerMgr::GetInstance()->getLogger(name)
 
 namespace svher {
 
@@ -55,6 +56,7 @@ namespace svher {
         };
 
         static const char* ToString(Level level);
+        static LogLevel::Level FromString(const std::string& str);
     };
 
     // 日志事件
@@ -110,10 +112,12 @@ namespace svher {
             virtual ~FormatItem() {}
             virtual void format(std::ostream& os, std::shared_ptr<Logger> logger, LogLevel::Level level, LogEvent::ptr event) = 0;
         };
+        bool isError() const { return m_error; }
     private:
         void init();
         std::string m_pattern;
         std::vector<FormatItem::ptr> m_items;
+        bool m_error = false;
     };
 
     // 日志输出地
@@ -128,6 +132,7 @@ namespace svher {
         void setLevel(LogLevel::Level level) { m_level = level; }
         LogLevel::Level getLevel() const { return m_level; }
         LogFormatter::ptr getFormatter() const { return m_formatter; }
+        virtual std::string toYamlString() = 0;
     protected:
         LogLevel::Level m_level = LogLevel::DEBUG;
         LogFormatter::ptr m_formatter;
@@ -135,22 +140,10 @@ namespace svher {
 
     // 日志输出器
     class Logger : public std::enable_shared_from_this<Logger> {
+        friend class LoggerManager;
     public:
         typedef std::shared_ptr<Logger> ptr;
-        Logger(const std::string& name = "root") : m_name(name) {
-            // %m -- 消息体
-            // %p -- level
-            // %r -- 启动后的时间
-            // %c -- 日志名称
-            // %t -- 线程 ID
-            // %n -- 回车
-            // %d -- 时间
-            // %f -- 文件名
-            // %l -- 行号
-            // %T -- Tab
-            // %F -- Fiber
-            m_formatter.reset(new LogFormatter("%d{%Y-%m-%d %H:%M:%S}%T%t%T%F%T[%p]%T[%c]%T<%f:%l>%T%m%n"));
-        }
+        Logger(const std::string& name = "root");
         void log(LogLevel::Level level, const LogEvent::ptr event);
         void info(const LogEvent::ptr event);
         void debug(const LogEvent::ptr event);
@@ -159,20 +152,27 @@ namespace svher {
         void fatal(const LogEvent::ptr event);
         void addAppender(LogAppender::ptr appender);
         void delAppender(LogAppender::ptr appender);
+        void clearAppenders();
         LogLevel::Level getLevel() const { return m_level; }
         void setLevel(LogLevel::Level level) { m_level = level; }
         const std::string getName() const { return m_name; }
+        void setFormatter(LogFormatter::ptr val);
+        void setFormatter(const std::string& val);
+        LogFormatter::ptr getFormatter();
+        std::string toYamlString();
     private:
         std::string m_name;
         LogLevel::Level m_level = LogLevel::DEBUG;
         std::list<LogAppender::ptr> m_appenders;
         LogFormatter::ptr m_formatter;
+        Logger::ptr m_root;
     };
 
     class StdOutLogAppender : public LogAppender {
     public:
         typedef std::shared_ptr<StdOutLogAppender> ptr;
         virtual void log(std::shared_ptr<Logger> logger, LogLevel::Level level, LogEvent::ptr event) override;
+        std::string toYamlString() override;
     private:
     };
 
