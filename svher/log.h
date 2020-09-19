@@ -113,6 +113,7 @@ namespace svher {
             virtual void format(std::ostream& os, std::shared_ptr<Logger> logger, LogLevel::Level level, LogEvent::ptr event) = 0;
         };
         bool isError() const { return m_error; }
+        const std::string getPattern() const { return m_pattern; }
     private:
         void init();
         std::string m_pattern;
@@ -122,13 +123,15 @@ namespace svher {
 
     // 日志输出地
     class LogAppender {
+        friend class Logger;
     public:
         typedef std::shared_ptr<LogAppender> ptr;
         virtual ~LogAppender() {}
 
         virtual void log(std::shared_ptr<Logger> logger, LogLevel::Level level, LogEvent::ptr event) = 0;
 
-        void setFormatter(LogFormatter::ptr val) { m_formatter = val; }
+        void setFormatter(LogFormatter::ptr val);
+        void setFormatter(const std::string& val);
         void setLevel(LogLevel::Level level) { m_level = level; }
         LogLevel::Level getLevel() const { return m_level; }
         LogFormatter::ptr getFormatter() const { return m_formatter; }
@@ -136,6 +139,7 @@ namespace svher {
     protected:
         LogLevel::Level m_level = LogLevel::DEBUG;
         LogFormatter::ptr m_formatter;
+        bool m_hasFormatter = false;
     };
 
     // 日志输出器
@@ -182,6 +186,7 @@ namespace svher {
         FileLogAppender(const std::string& filename);
         virtual void log(std::shared_ptr<Logger> logger, LogLevel::Level level, LogEvent::ptr event) override;
         bool reopen();
+        std::string toYamlString() override;
     private:
         std::string m_filename;
         std::ofstream m_filestream;
@@ -193,6 +198,7 @@ namespace svher {
         Logger::ptr getLogger(const std::string& name);
         void init();
         Logger::ptr getRoot() const { return m_root; }
+        std::string toYamlString();
     private:
         std::map<std::string, Logger::ptr> m_loggers;
         Logger::ptr m_root;

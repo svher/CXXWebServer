@@ -165,7 +165,7 @@ namespace svher {
 
     void Logger::addAppender(LogAppender::ptr appender) {
         if (!appender->getFormatter()) {
-            appender->setFormatter(m_formatter);
+            appender->m_formatter = m_formatter;
         }
         m_appenders.push_back(appender);
     }
@@ -252,6 +252,49 @@ namespace svher {
             std::cout << m_formatter->format(logger, level, event);
         }
     }
+
+    std::string FileLogAppender::toYamlString() {
+        YAML::Node node;
+        node["type"] = "FileLogAppender";
+        node["file"] = m_filename;
+        if (m_level != LogLevel::UNKNOWN)
+            node["level"] = LogLevel::ToString(m_level);
+        if (m_hasFormatter && m_formatter) {
+            node["formatter"] = m_formatter->getPattern();
+        }
+        std::stringstream ss;
+        ss << node;
+        return ss.str();
+    }
+
+    std::string StdOutLogAppender::toYamlString() {
+        YAML::Node node;
+        node["type"] = "StdoutLogAppender";
+        if (m_level != LogLevel::UNKNOWN)
+            node["level"] = LogLevel::ToString(m_level);
+        if (m_hasFormatter && m_formatter) {
+            node["formatter"] = m_formatter->getPattern();
+        }
+        std::stringstream ss;
+        ss << node;
+        return ss.str();
+    }
+
+    std::string Logger::toYamlString() {
+        YAML::Node node;
+        node["name"] = m_name;
+        if (m_level != LogLevel::UNKNOWN)
+            node["level"] = LogLevel::ToString(m_level);
+        if (m_formatter) {
+            node["formatter"] = m_formatter->getPattern();
+        }
+        for(auto& i : m_appenders) {
+            node["appenders"].push_back(YAML::Load(i->toYamlString()));
+        }
+        std::stringstream ss;
+        ss << node;
+        return ss.str();
+    };
 
     LogFormatter::LogFormatter(const std::string &pattern) : m_pattern(pattern) {
         init();
@@ -432,7 +475,7 @@ namespace svher {
     }
 
     void Logger::setFormatter(LogFormatter::ptr val) {
-
+        m_formatter = val;
     }
     void Logger::setFormatter(const std::string& val) {
         LogFormatter::ptr new_val(new svher::LogFormatter(val));
@@ -440,7 +483,7 @@ namespace svher {
             std::cout << "Logger setFormatter name=" << m_name << "value=" << val << " invalid formatter";
             return;
         }
-        m_formatter = new_val;
+        setFormatter(new_val);
     }
 
     LogFormatter::ptr Logger::getFormatter() {
@@ -479,13 +522,13 @@ namespace svher {
                                 std::cout << "log config error: file appender file is null, " << a << std::endl;
                             }
                             lad.file = a["file"].as<std::string>();
-                            if (a["formatter"].IsDefined()) {
-                                lad.formatter = n["formatter"].as<std::string>();
-                            }
                         } else if (type == "StdoutLogAppender"){
                             lad.type = 2;
                         } else {
                             std::cout << "log config error: appender type is invalid, " << a << std::endl;
+                        }
+                        if (a["formatter"].IsDefined()) {
+                            lad.formatter = a["formatter"].as<std::string>();
                         }
                         ld.appenders.push_back(lad);
                     }
@@ -504,7 +547,8 @@ namespace svher {
             for (auto& i : v) {
                 YAML::Node n;
                 n["name"] = i.name;
-                n["level"] = LogLevel::ToString(i.level);
+                if (i.level != LogLevel::UNKNOWN)
+                    n["level"] = LogLevel::ToString(i.level);
                 if (i.formatter.empty()) {
                     n["formatter"] = i.formatter;
                 }
@@ -516,7 +560,8 @@ namespace svher {
                     } else if (a.type == 2) {
                         na["type"] = "StdoutLogAppender";
                     }
-                    na["level"] = LogLevel::ToString(a.level);
+                    if (a.level != LogLevel::UNKNOWN)
+                        na["level"] = LogLevel::ToString(a.level);
 
                     if(!a.formatter.empty()) {
                         na["formatter"] = a.formatter;
@@ -564,6 +609,9 @@ namespace svher {
                         }
                         ap->setLevel(a.level);
                         logger->addAppender(ap);
+                        if (!a.formatter.empty()) {
+                            ap->setFormatter(a.formatter);
+                        }
                     }
 
                 }
@@ -582,11 +630,30 @@ namespace svher {
 
     static LogIniter __log_init;
 
-    std::string toYamlString() {
-
+    std::string LoggerManager::toYamlString() {
+        YAML::Node node;
+        for(auto& i : m_loggers) {
+            node.push_back(YAML::Load(i.second->toYamlString()));
+        }
+        std::stringstream ss;
+        ss << node;
+        return ss.str();
     }
 
     void LoggerManager::init() {
 
+    }
+
+    void LogAppender::setFormatter(LogFormatter::ptr val) {
+        m_formatter = val;
+        if (m_formatter) {
+            m_hasFormatter = true;
+        }
+        else
+            m_hasFormatter = false;
+    }
+
+    void LogAppender::setFormatter(const std::string &val) {
+        setFormatter(LogFormatter::ptr(new LogFormatter(val)));
     }
 }
