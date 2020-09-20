@@ -14,11 +14,12 @@
 #include <cstdarg>
 #include "singleton.h"
 #include "util.h"
+#include "thread.h"
 
 #define LOG_LEVEL(logger, level) \
     if (logger->getLevel() <= level)   \
         svher::LogEventWrap(svher::LogEvent::ptr(new svher::LogEvent(logger, level, __FILE__, __LINE__, 0, \
-            svher::GetThreadId(), svher::GetFiberId(), time(0)))).getSS()
+            svher::GetThreadId(), svher::GetFiberId(), time(0), svher::Thread::GetName()))).getSS()
 
 #define LOG_DEBUG(logger) LOG_LEVEL(logger, svher::LogLevel::DEBUG)
 #define LOG_INFO(logger) LOG_LEVEL(logger, svher::LogLevel::INFO)
@@ -29,7 +30,7 @@
 #define LOG_LEVEL_FORMAT(logger, level, fmt, ...) \
     if (logger->getLevel() <= level)   \
         svher::LogEventWrap(svher::LogEvent::ptr(new svher::LogEvent(logger, level, __FILE__, __LINE__, 0, \
-            svher::GetThreadId(), svher::GetFiberId(), time(0)))).getEvent()->format(fmt, __VA_ARGS__)
+            svher::GetThreadId(), svher::GetFiberId(), time(0), svher::Thread::GetName()))).getEvent()->format(fmt, __VA_ARGS__)
 
 #define LOG_DEBUG_FORMAT(logger, fmt, ...) LOG_LEVEL_FORMAT(logger, svher::LogLevel::DEBUG, fmt, __VA_ARGS__)
 #define LOG_INFO_FORMAT(logger, fmt, ...) LOG_LEVEL_FORMAT(logger, svher::LogLevel::INFO, __VA_ARGS__)
@@ -59,11 +60,16 @@ namespace svher {
         static LogLevel::Level FromString(const std::string& str);
     };
 
+    typedef Spinlock MutexType;
+
     // 日志事件
     class LogEvent {
     public:
         typedef std::shared_ptr<LogEvent> ptr;
-        LogEvent(std::shared_ptr<Logger> logger, LogLevel::Level level, const char* file, int32_t line, uint32_t elapse, uint32_t thread_id, uint32_t fiber_id, uint64_t time);
+        LogEvent(std::shared_ptr<Logger> logger, LogLevel::Level level,
+                 const char* file, int32_t line, uint32_t elapse,
+                 uint32_t thread_id, uint32_t fiber_id, uint64_t time,
+                 const std::string& thread_name);
         ~LogEvent();
         const char* getFile() const {
             return m_file;
@@ -75,6 +81,7 @@ namespace svher {
         uint64_t getTime() const { return m_time; }
         std::string getContent() const { return m_ss.str(); }
         std::stringstream& getSS() { return m_ss; }
+        std::string getThreadName() const { return m_threadName; }
         std::shared_ptr<Logger> getLogger() { return m_logger; }
         LogLevel::Level getLevel() {  return m_level; }
         void format(const char* fmt, ...);
@@ -85,6 +92,7 @@ namespace svher {
         uint32_t m_threadId = 0;        // 线程 Id
         uint32_t m_fiberId = 0;         // 协程 Id
         uint64_t m_time;                // 时间戳
+        std::string m_threadName;
         std::stringstream m_ss;
         std::shared_ptr<Logger> m_logger;
         LogLevel::Level m_level;
@@ -103,17 +111,17 @@ namespace svher {
     class LogFormatter {
     public:
         typedef std::shared_ptr<LogFormatter> ptr;
-        LogFormatter(const std::string& pattern);
+        explicit LogFormatter(std::string pattern);
         std::string format(std::shared_ptr<Logger> logger, LogLevel::Level level, LogEvent::ptr event);
         class FormatItem {
         public:
             typedef std::shared_ptr<LogFormatter::FormatItem> ptr;
-            FormatItem(const std::string& fmt) {}
-            virtual ~FormatItem() {}
+            explicit FormatItem(const std::string& fmt) {}
+            virtual ~FormatItem() = default;
             virtual void format(std::ostream& os, std::shared_ptr<Logger> logger, LogLevel::Level level, LogEvent::ptr event) = 0;
         };
         bool isError() const { return m_error; }
-        const std::string getPattern() const { return m_pattern; }
+        std::string getPattern() const { return m_pattern; }
     private:
         void init();
         std::string m_pattern;
@@ -126,7 +134,7 @@ namespace svher {
         friend class Logger;
     public:
         typedef std::shared_ptr<LogAppender> ptr;
-        virtual ~LogAppender() {}
+        virtual ~LogAppender() = default;
 
         virtual void log(std::shared_ptr<Logger> logger, LogLevel::Level level, LogEvent::ptr event) = 0;
 
@@ -134,11 +142,12 @@ namespace svher {
         bool setFormatter(const std::string& val);
         void setLevel(LogLevel::Level level) { m_level = level; }
         LogLevel::Level getLevel() const { return m_level; }
-        LogFormatter::ptr getFormatter() const { return m_formatter; }
+        LogFormatter::ptr getFormatter();
         virtual std::string toYamlString() = 0;
     protected:
         LogLevel::Level m_level = LogLevel::DEBUG;
         LogFormatter::ptr m_formatter;
+        MutexType m_mutex;
         bool m_hasFormatter = false;
     };
 
@@ -147,24 +156,25 @@ namespace svher {
         friend class LoggerManager;
     public:
         typedef std::shared_ptr<Logger> ptr;
-        Logger(const std::string& name = "root");
-        void log(LogLevel::Level level, const LogEvent::ptr event);
-        void info(const LogEvent::ptr event);
-        void debug(const LogEvent::ptr event);
-        void warn(const LogEvent::ptr event);
-        void error(const LogEvent::ptr event);
-        void fatal(const LogEvent::ptr event);
+        explicit Logger(const std::string& name = "root");
+        void log(LogLevel::Level level, LogEvent::ptr event);
+        void info(LogEvent::ptr event);
+        void debug(LogEvent::ptr event);
+        void warn(LogEvent::ptr event);
+        void error(LogEvent::ptr event);
+        void fatal(LogEvent::ptr event);
         void addAppender(LogAppender::ptr appender);
         void delAppender(LogAppender::ptr appender);
         void clearAppenders();
         LogLevel::Level getLevel() const { return m_level; }
         void setLevel(LogLevel::Level level) { m_level = level; }
-        const std::string getName() const { return m_name; }
+        std::string getName() const { return m_name; }
         void setFormatter(LogFormatter::ptr val);
         void setFormatter(const std::string& val);
         LogFormatter::ptr getFormatter();
         std::string toYamlString();
     private:
+        MutexType m_mutex;
         std::string m_name;
         LogLevel::Level m_level = LogLevel::DEBUG;
         std::list<LogAppender::ptr> m_appenders;
@@ -175,7 +185,7 @@ namespace svher {
     class StdOutLogAppender : public LogAppender {
     public:
         typedef std::shared_ptr<StdOutLogAppender> ptr;
-        virtual void log(std::shared_ptr<Logger> logger, LogLevel::Level level, LogEvent::ptr event) override;
+        void log(std::shared_ptr<Logger> logger, LogLevel::Level level, LogEvent::ptr event) override;
         std::string toYamlString() override;
     private:
     };
@@ -183,13 +193,14 @@ namespace svher {
     class FileLogAppender : public LogAppender {
     public:
         typedef std::shared_ptr<StdOutLogAppender> ptr;
-        FileLogAppender(const std::string& filename);
+        explicit FileLogAppender(const std::string& filename);
         virtual void log(std::shared_ptr<Logger> logger, LogLevel::Level level, LogEvent::ptr event) override;
         bool reopen();
         std::string toYamlString() override;
     private:
         std::string m_filename;
         std::ofstream m_filestream;
+        uint64_t m_lastTime;
     };
 
     class LoggerManager {
@@ -200,6 +211,7 @@ namespace svher {
         Logger::ptr getRoot() const { return m_root; }
         std::string toYamlString();
     private:
+        MutexType m_mutex;
         std::map<std::string, Logger::ptr> m_loggers;
         Logger::ptr m_root;
     };

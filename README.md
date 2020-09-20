@@ -45,6 +45,30 @@ LoggerMgr::GetInstance()->getLogger(name)
 LOG_INFO(g_logger) << "xxxx"
 ```
 
+# 线程库
+Mutex, RWMutex
+
+日志库使用 Spinlock 加锁
+
+
 # 协程库封装
+
+```
+main_fiber ----- child_fiber
+scheduler --1:N-- thread --1:M-- fiber
+```
+
+1. 线程池，分配一组线程
+2. 协程调度器，将协程指定到线程中执行
+
+<function, fiber, thread> -- fiber
+
+schedule(func/fiber)
+
+1. 设置当前线程的 scheduler
+2. 设置当前线程的 fiber
+3. 执行消息循环
+    - 协程消息队列是否有任务
+    - 无任务时执行 idle
 
 # socket 函数库

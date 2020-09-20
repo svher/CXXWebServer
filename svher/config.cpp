@@ -45,4 +45,12 @@ namespace svher {
         }
         else return nullptr;
     }
+
+    void Config::Visit(std::function<void(ConfigVarBase::ptr)> cb) {
+        RWMutexType::ReadLock lock(GetMutex());
+        ConfigVarMap &m = GetDatas();
+        for (auto & it : m) {
+            cb(it.second);
+        }
+    }
 }

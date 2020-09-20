@@ -11,8 +11,12 @@
 #include <string>
 #include <functional>
 #include "log.h"
+#include "thread.h"
 
 namespace svher {
+
+    typedef RWMutex RWMutexType;
+
     class ConfigVarBase {
     public:
         typedef std::shared_ptr<ConfigVarBase> ptr;
@@ -239,6 +243,7 @@ namespace svher {
         }
         std::string toString() override {
             try {
+                RWMutexType::ReadLock lock(m_mutex);
                 return ToStr()(m_val);
             } catch (std::exception& e) {
                 LOG_ERROR(LOG_ROOT()) << "ConfigVar::toString exception" << e.what() << ' ' << typeid(m_val).name();
@@ -254,29 +259,45 @@ namespace svher {
             }
             return true;
         }
-        const T& getValue() const { return m_val; }
+        const T& getValue() {
+            RWMutexType::ReadLock lock(m_mutex);
+            return m_val;
+        }
         void setValue(const T& val) {
-            if (val == m_val)
-                return;
-            for (auto& i : m_cbs)
-                i.second(m_val, val);
+            {
+                // 回调时间可能比较长
+                RWMutexType::ReadLock lock(m_mutex);
+                if (val == m_val)
+                    return;
+                for (auto &i : m_cbs)
+                    i.second(m_val, val);
+            }
+            RWMutexType::WriteLock lock(m_mutex);
             m_val = val;
         }
         std::string getTypeName() const override { return typeid(T).name(); }
-        void addListener(uint64_t key, on_change_cb cb) {
-            m_cbs[key] = cb;
+        uint64_t addListener(on_change_cb cb) {
+            static uint64_t s_fun_id = 0;
+            RWMutexType::WriteLock lock(m_mutex);
+            ++s_fun_id;
+            m_cbs[s_fun_id] = cb;
+            return s_fun_id;
         }
         void delListener(uint64_t key) {
+            RWMutexType::WriteLock lock(m_mutex);
             m_cbs.erase(key);
         }
         void clearListener() {
+            RWMutexType::WriteLock lock(m_mutex);
             m_cbs.clear();
         }
         on_change_cb getListener(uint64_t key) {
+            RWMutexType::ReadLock lock(m_mutex);
             auto it = m_cbs.find(key);
             return it == m_cbs.end() ? nullptr : it->second;
         }
     private:
+        RWMutexType m_mutex;
         T m_val;
         // functional 没有重载 compare，无法查找 functional
         // key, functional
@@ -288,6 +309,7 @@ namespace svher {
         typedef std::map<std::string, ConfigVarBase::ptr> ConfigVarMap;
         template<class T>
         static typename ConfigVar<T>::ptr Lookup(const std::string& name, const T& default_value, const std::string& description = "") {
+            RWMutexType::WriteLock lock(GetMutex());
             auto it = GetDatas().find(name);
             if (it != GetDatas().end()) {
                 auto tmp = std::dynamic_pointer_cast<ConfigVar<T>>(it->second);
@@ -299,7 +321,7 @@ namespace svher {
                     return nullptr;
                 }
             }
-            if (name.find_first_not_of("abcdedghijklmnopqrstuvwxyz._0123456789") != std::string::npos) {
+            if (name.find_first_not_of("abcdefghijklmnopqrstuvwxyz._0123456789") != std::string::npos) {
                 LOG_ERROR(LOG_ROOT()) << "Lookup name invalid " << name;
                 throw std::invalid_argument(name);
             }
@@ -311,6 +333,7 @@ namespace svher {
 
         template<class T>
         static typename ConfigVar<T>::ptr Lookup(const std::string& name) {
+            RWMutexType::ReadLock lock(GetMutex());
             auto it = GetDatas().find(name);
             if (it == GetDatas().end()) {
                 return nullptr;
@@ -320,10 +343,15 @@ namespace svher {
 
         static void LoadFromYaml(const YAML::Node& root);
         static ConfigVarBase::ptr LookupBase(const std::string& name);
+        static void Visit(std::function<void(ConfigVarBase::ptr)> cb);
     private:
         static ConfigVarMap& GetDatas() {
             static ConfigVarMap m_datas;
             return m_datas;
+        }
+        static RWMutexType& GetMutex() {
+            static RWMutexType m_mutex;
+            return m_mutex;
         }
     };
 }

@@ -133,7 +133,7 @@ void test_class() {
     LOG_INFO(LOG_ROOT()) << "before: " << g_person->getValue().toString() << " - " << g_person->toString();
     LOG_INFO(LOG_ROOT()) << "before: " << g_person_vec_map->toString();
 
-    g_person->addListener(10, [](const Person& old_val, const Person& new_val) {
+    g_person->addListener([](const Person& old_val, const Person& new_val) {
        LOG_INFO(LOG_ROOT()) << "old_val=" << old_val.toString() << " new_val=" << new_val.toString();
     });
 
@@ -176,6 +176,12 @@ int main(int argc, char** argv) {
     // test_class();
     test_log();
 
+    svher::Config::Visit([](svher::ConfigVarBase::ptr var) {
+        LOG_INFO(LOG_ROOT()) << "name=" << var->getName()
+                           << " description=" << var->getDescription()
+                           << " typename=" << var->getTypeName()
+                           << " value=" << var->toString();
+    });
     //auto int_map_config = svher::Config::Lookup<std::unordered_map<std::string, int>>("system.str_int_map", std::unordered_map<std::string, int>{
     //      {"a", 2}, {"b", 3}}, "system int map");
 }

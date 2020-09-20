@@ -1,4 +1,5 @@
 #include "log.h"
+
 #include "config.h"
 
 namespace svher {
@@ -19,10 +20,13 @@ namespace svher {
         }
     }
 
-    LogEvent::LogEvent(std::shared_ptr<Logger> logger, LogLevel::Level level, const char *file, int32_t line, uint32_t elapse, uint32_t thread_id, uint32_t fiber_id,
-                       uint64_t time) :
+    LogEvent::LogEvent(std::shared_ptr<Logger> logger, LogLevel::Level level,
+                       const char *file, int32_t line, uint32_t elapse,
+                       uint32_t thread_id, uint32_t fiber_id,
+                       uint64_t time, const std::string& thread_name) :
                        m_file(file), m_line(line), m_elapse(elapse), m_threadId(thread_id),
-                       m_fiberId(fiber_id), m_time(time), m_logger(logger), m_level(level) {
+                       m_fiberId(fiber_id), m_time(time), m_threadName(thread_name),
+                       m_logger(std::move(logger)), m_level(level) {
     }
 
     LogEvent::~LogEvent() {
@@ -95,6 +99,14 @@ namespace svher {
         }
     };
 
+    class ThreadNameFormatItem : public LogFormatter::FormatItem {
+    public:
+        ThreadNameFormatItem(const std::string& fmt = "") : FormatItem(fmt) {}
+        void format(std::ostream &os, Logger::ptr logger, LogLevel::Level level, LogEvent::ptr event) override {
+            os << event->getThreadName();
+        }
+    };
+
     class NewLineFormatItem : public LogFormatter::FormatItem {
     public:
         NewLineFormatItem(const std::string &fmt) : FormatItem(fmt) {}
@@ -163,14 +175,22 @@ namespace svher {
         }
     };
 
+    LogFormatter::ptr LogAppender::getFormatter() {
+        MutexType::Lock lock(m_mutex);
+        return m_formatter;
+    }
+
     void Logger::addAppender(LogAppender::ptr appender) {
+        MutexType::Lock lock(m_mutex);
         if (!appender->getFormatter()) {
+            MutexType::Lock ll(appender->m_mutex);
             appender->m_formatter = m_formatter;
         }
         m_appenders.push_back(appender);
     }
 
     void Logger::delAppender(LogAppender::ptr appender) {
+        MutexType::Lock lock(m_mutex);
         for (auto it = m_appenders.begin(); it != m_appenders.end(); ++it) {
             if (*it == appender) {
                 m_appenders.erase(it);
@@ -182,6 +202,7 @@ namespace svher {
     void Logger::log(LogLevel::Level level, const LogEvent::ptr event) {
         if (level >= m_level) {
             auto self = shared_from_this();
+            MutexType::Lock lock(m_mutex);
             if (!m_appenders.empty()) {
                 for (auto &i : m_appenders) {
                     i->log(self, level, event);
@@ -205,7 +226,8 @@ namespace svher {
         // %l -- 行号
         // %T -- Tab
         // %F -- Fiber
-        m_formatter.reset(new LogFormatter("%d{%Y-%m-%d %H:%M:%S}%T%t%T%F%T[%p]%T[%c]%T<%f:%l>%T%m%n"));
+        // %N -- 线程名（通过 SetName 指定）
+        m_formatter.reset(new LogFormatter("%d{%Y-%m-%d %H:%M:%S}%T%t%T%N%T%F%T[%p]%T[%c]%T<%f:%l>%T%m%n"));
     }
 
     void Logger::debug(const LogEvent::ptr event) {
@@ -235,11 +257,18 @@ namespace svher {
 
     void FileLogAppender::log(Logger::ptr logger, LogLevel::Level level, LogEvent::ptr event) {
         if (level >= m_level) {
+            uint64_t now = time(0);
+            if (now != m_lastTime) {
+                reopen();
+                m_lastTime = now;
+            }
+            MutexType::Lock lock(m_mutex);
             m_filestream << m_formatter->format(logger, level, event);
         }
     }
 
     bool FileLogAppender::reopen() {
+        MutexType::Lock lock(m_mutex);
         if (m_filestream) {
             m_filestream.close();
         }
@@ -249,11 +278,13 @@ namespace svher {
 
     void StdOutLogAppender::log(Logger::ptr logger, LogLevel::Level level, LogEvent::ptr event) {
         if (level >= m_level) {
+            MutexType::Lock lock(m_mutex);
             std::cout << m_formatter->format(logger, level, event);
         }
     }
 
     std::string FileLogAppender::toYamlString() {
+        MutexType::Lock lock(m_mutex);
         YAML::Node node;
         node["type"] = "FileLogAppender";
         node["file"] = m_filename;
@@ -268,6 +299,7 @@ namespace svher {
     }
 
     std::string StdOutLogAppender::toYamlString() {
+        MutexType::Lock lock(m_mutex);
         YAML::Node node;
         node["type"] = "StdoutLogAppender";
         if (m_level != LogLevel::UNKNOWN)
@@ -281,6 +313,7 @@ namespace svher {
     }
 
     std::string Logger::toYamlString() {
+        MutexType::Lock lock(m_mutex);
         YAML::Node node;
         node["name"] = m_name;
         if (m_level != LogLevel::UNKNOWN)
@@ -296,7 +329,7 @@ namespace svher {
         return ss.str();
     };
 
-    LogFormatter::LogFormatter(const std::string &pattern) : m_pattern(pattern) {
+    LogFormatter::LogFormatter(std::string pattern) : m_pattern(std::move(pattern)) {
         init();
     }
 
@@ -380,6 +413,7 @@ namespace svher {
                 XX(r, ElapseFormatItem),
                 XX(c, NameFormatItem),
                 XX(t, ThreadIdFormatItem),
+                XX(N, ThreadNameFormatItem),
                 XX(n, NewLineFormatItem),
                 XX(d, DateTimeFormatItem),
                 XX(f, FilenameFormatItem),
@@ -435,6 +469,7 @@ namespace svher {
     }
 
     Logger::ptr LoggerManager::getLogger(const std::string &name) {
+        MutexType::Lock lock(m_mutex);
         auto it = m_loggers.find(name);
         if (it != m_loggers.end()) return it->second;
         Logger::ptr logger(new Logger(name));
@@ -471,13 +506,16 @@ namespace svher {
     ConfigVar<std::set<LogDefine>>::ptr g_log_defines = Config::Lookup("logs", std::set<LogDefine>(), "logs config");
 
     void Logger::clearAppenders() {
+        MutexType::Lock lock(m_mutex);
         m_appenders.clear();
     }
 
     void Logger::setFormatter(LogFormatter::ptr val) {
+        MutexType::Lock lock(m_mutex);
         m_formatter = val;
 
         for (auto& i : m_appenders) {
+            MutexType::Lock ll(i->m_mutex);
             if (!i->m_hasFormatter) {
                 i->m_formatter = m_formatter;
             }
@@ -586,7 +624,7 @@ namespace svher {
 
     struct LogIniter {
         LogIniter() {
-            g_log_defines->addListener(0x123456, [](const std::set<LogDefine>& old_value, const std::set<LogDefine>& new_value){
+            g_log_defines->addListener([](const std::set<LogDefine>& old_value, const std::set<LogDefine>& new_value){
                 // 新增日志 修改日志 删除日志
                 LOG_INFO(LOG_ROOT()) << "on_log_conf_changed";
                 for (auto& i : new_value) {
@@ -640,6 +678,7 @@ namespace svher {
     static LogIniter __log_init;
 
     std::string LoggerManager::toYamlString() {
+        MutexType::Lock lock(m_mutex);
         YAML::Node node;
         for(auto& i : m_loggers) {
             node.push_back(YAML::Load(i.second->toYamlString()));
@@ -654,6 +693,7 @@ namespace svher {
     }
 
     void LogAppender::setFormatter(LogFormatter::ptr val) {
+        MutexType::Lock lock(m_mutex);
         m_formatter = val;
         if (m_formatter) {
             m_hasFormatter = true;
