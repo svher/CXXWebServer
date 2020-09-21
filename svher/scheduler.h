@@ -11,7 +11,7 @@ namespace svher {
     public:
         typedef Mutex MutexType;
         typedef std::shared_ptr<Scheduler> ptr;
-        explicit Scheduler(size_t threads = 1, bool use_caller = true, std::string name = "");
+        explicit Scheduler(size_t threads = 1, bool use_caller = false, const std::string& name = "");
         virtual ~Scheduler();
         const std::string& getName() const { return m_name; }
         static Scheduler* GetThis();

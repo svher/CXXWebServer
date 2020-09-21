@@ -11,11 +11,11 @@ void func() {
 
 void test_fiber() {
     auto ptr = svher::Fiber::GetThis();
-    svher::Fiber::ptr fiber(new svher::Fiber(func));
-    LOG_INFO(g_logger) << "first swapIn";
-    fiber->swapIn();
-    LOG_INFO(g_logger) << "second swapIn";
-    fiber->swapIn();
+    svher::Fiber::ptr fiber(new svher::Fiber(func, 0, true));
+    LOG_INFO(g_logger) << "first call";
+    fiber->call();
+    LOG_INFO(g_logger) << "second call";
+    fiber->call();
 }
 
 int main(int argc, char** argv) {

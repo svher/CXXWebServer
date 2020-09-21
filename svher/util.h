@@ -13,6 +13,6 @@
 namespace svher {
     pid_t GetThreadId();
     uint32_t GetFiberId();
-    void Backtrace(std::vector<std::string>& bt, int size, int skip);
-    std::string BacktraceToString(int size, const std::string& prefix = "", int skip = 2);
+    void Backtrace(std::vector<std::string>& bt, int size = 64, int skip = 1);
+    std::string BacktraceToString(int size = 64, const std::string& prefix = "", int skip = 2);
 }

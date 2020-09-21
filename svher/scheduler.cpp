@@ -8,8 +8,7 @@ namespace svher {
     static thread_local Scheduler* t_scheduler = nullptr;
     static thread_local Fiber* t_fiber = nullptr;
 
-    Scheduler::Scheduler(size_t threads, bool use_caller, std::string name)
-     : m_name(std::move(name)) {
+    Scheduler::Scheduler(size_t threads, bool use_caller, const std::string& name) : m_name(name) {
         ASSERT(threads > 0);
         if (use_caller) {
             Fiber::GetThis();
@@ -17,8 +16,8 @@ namespace svher {
             // 只允许有一个协程调度器
             ASSERT(GetThis() == nullptr);
             t_scheduler = this;
-            m_rootFiber.reset(new Fiber(std::bind(&Scheduler::run, this)));
-            Thread::SetName(m_name);
+            m_rootFiber.reset(new Fiber(std::bind(&Scheduler::run, this), 0, true));
+            if (!m_name.empty()) Thread::SetName(m_name);
             t_fiber = m_rootFiber.get();
             m_rootThread = svher::GetThreadId();
             m_threadIds.push_back(m_rootThread);
@@ -36,11 +35,11 @@ namespace svher {
     }
 
     Scheduler *Scheduler::GetThis() {
-        return nullptr;
+        return t_scheduler;
     }
 
     Fiber *Scheduler::GetMainFiber() {
-        return nullptr;
+        return t_fiber;
     }
 
     void Scheduler::start() {
@@ -58,8 +57,10 @@ namespace svher {
             m_threadIds.push_back(m_threads[i]->getId());
         }
         lock.unlock();
-        if (m_rootFiber)
-            m_rootFiber->swapIn();
+        if (m_rootFiber) {
+            m_rootFiber->call();
+            LOG_INFO(g_logger) << "call out " << m_rootFiber->getState();
+        }
     }
 
     void Scheduler::stop() {
@@ -96,7 +97,7 @@ namespace svher {
     }
 
     void Scheduler::tickle() {
-
+        LOG_INFO(g_logger) << "tickle";
     }
 
     void Scheduler::run() {
@@ -106,6 +107,7 @@ namespace svher {
             t_fiber = Fiber::GetThis().get();
         }
         Fiber::ptr idle_fiber(new Fiber(std::bind(&Scheduler::idle, this)));
+        LOG_INFO(g_logger) << "init idle fiber, id: " << idle_fiber->getId();
         Fiber::ptr cb_fiber;
 
         FiberAndThread ft;
@@ -130,6 +132,7 @@ namespace svher {
                     // 取出一个需要执行的任务
                     ft = *it;
                     m_fibers.erase(it);
+                    break;
                 }
             }
             if (tickle_me) {
@@ -161,7 +164,7 @@ namespace svher {
                     schedule(ft.fiber);
                     cb_fiber.reset();
                 } else if (cb_fiber->getState() == Fiber::TERM
-                           && cb_fiber->getState() == Fiber::EXCEPT) {
+                           || cb_fiber->getState() == Fiber::EXCEPT) {
                     cb_fiber->reset(nullptr);
                 } else {
                     cb_fiber->m_state = Fiber::HOLD;
@@ -175,7 +178,7 @@ namespace svher {
                 ++m_idleThreadCount;
                 idle_fiber->swapIn();
                 if (idle_fiber->getState() != Fiber::TERM
-                    || idle_fiber->getState() != Fiber::EXCEPT) {
+                    && idle_fiber->getState() != Fiber::EXCEPT) {
                     idle_fiber->m_state = Fiber::HOLD;
                 }
                 --m_idleThreadCount;

@@ -20,3 +20,11 @@ function(force_redefine_file_macro_for_sources targetname)
         )
     endforeach()
 endfunction()
+
+function(my_add_executable targetname srcs depends libs)
+    add_executable(${targetname} ${srcs})
+    # 先编译下层库，再编译上层库
+    add_dependencies(${targetname} ${depends})
+    force_redefine_file_macro_for_sources(${targetname})
+    target_link_libraries(${targetname} ${libs})
+endfunction()

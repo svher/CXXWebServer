@@ -7,7 +7,9 @@ namespace svher {
     static std::atomic<uint64_t> s_fiber_id{0};
     static std::atomic<uint64_t> s_fiber_count{0};
 
+    // 当前线程正在执行的协程
     static thread_local Fiber* t_fiber = nullptr;
+    // 线程的主协程
     static thread_local Fiber::ptr t_threadFiber = nullptr;
 
     static Logger::ptr g_logger = LOG_NAME("sys");
@@ -27,7 +29,8 @@ namespace svher {
 
     using StackAlloc = MallocStackAllocator;
 
-    Fiber::Fiber(std::function<void()> cb, size_t stacksize) :m_id(++s_fiber_id), m_cb(std::move(cb)) {
+    Fiber::Fiber(std::function<void()> cb, size_t stacksize, bool use_caller)
+        : m_id(++s_fiber_id), m_useCaller(use_caller), m_cb(std::move(cb)) {
         ++s_fiber_count;
         m_stacksize = stacksize ? stacksize : g_fiber_stack_size->getValue();
         m_stack = StackAlloc::Alloc(m_stacksize);
@@ -37,7 +40,12 @@ namespace svher {
         m_ctx.uc_link = nullptr;
         m_ctx.uc_stack.ss_sp = m_stack;
         m_ctx.uc_stack.ss_size = m_stacksize;
-        makecontext(&m_ctx, &Fiber::MainFunc, 0);
+        // 如果线程中直接执行协程而非调度器执行，则使用 CallerMainFunc
+        if (use_caller)
+            makecontext(&m_ctx, &Fiber::CallerMainFunc, 0);
+        else {
+            makecontext(&m_ctx, &Fiber::MainFunc, 0);
+        }
         LOG_DEBUG(g_logger) << "Fiber::Fiber id: " << m_id;
     }
 
@@ -54,7 +62,8 @@ namespace svher {
     Fiber::~Fiber() {
         --s_fiber_count;
         if (m_stack) {
-            ASSERT(m_state == TERM || m_state == INIT);
+            ASSERT2(m_state == TERM || m_state == INIT || m_state == EXCEPT,
+                   "id: " + std::to_string(m_id) + "state: " + std::to_string(m_state));
             StackAlloc::Dealloc(m_stack, m_stacksize);
         } else {
             // Is Main Fiber
@@ -85,14 +94,23 @@ namespace svher {
         SetThis(this);
         ASSERT(m_state != EXEC);
         m_state = EXEC;
-        if (swapcontext(&t_threadFiber->m_ctx, &m_ctx)) {
+        if (swapcontext(&Scheduler::GetMainFiber()->m_ctx, &m_ctx)) {
             ASSERT2(false, "swapcontext");
         }
     }
 
     void Fiber::swapOut() {
-        SetThis(t_threadFiber.get());
+        ASSERT(Scheduler::GetMainFiber()->m_state == EXEC);
+        SetThis(Scheduler::GetMainFiber());
+        if (swapcontext(&m_ctx, &Scheduler::GetMainFiber()->m_ctx)) {
+            ASSERT2(false, "swapcontext");
+        }
+
+    }
+
+    void Fiber::callOut() {
         ASSERT(t_threadFiber->m_state == EXEC);
+        SetThis(t_threadFiber.get());
         if (swapcontext(&m_ctx, &t_threadFiber->m_ctx)) {
             ASSERT2(false, "swapcontext");
         }
@@ -111,13 +129,19 @@ namespace svher {
     void Fiber::YieldToReady() {
         Fiber::ptr cur = GetThis();
         cur->m_state = READY;
-        cur->swapOut();
+        if (cur->m_useCaller)
+            cur->callOut();
+        else
+            cur->swapOut();
     }
 
     void Fiber::YieldToHold() {
         Fiber::ptr cur = GetThis();
         cur->m_state = HOLD;
-        cur->swapOut();
+        if (cur->m_useCaller)
+            cur->callOut();
+        else
+            cur->swapOut();
     }
 
     uint64_t Fiber::TotalFibers() {
@@ -133,7 +157,9 @@ namespace svher {
             cur->m_state = TERM;
         } catch (std::exception& ex) {
             cur->m_state = EXCEPT;
-            LOG_ERROR(g_logger) << "Fiber exception: " << ex.what();
+            LOG_ERROR(g_logger) << "Fiber exception: " << ex.what()
+                    << " fiber_id=" << cur->getId()
+                    << std::endl << BacktraceToString();
         } catch (...) {
             cur->m_state = EXCEPT;
             LOG_ERROR(g_logger) << "Fiber exception: ";
@@ -143,6 +169,8 @@ namespace svher {
         cur.reset();
         raw_ptr->swapOut();
 
+        // caller 线程调用 MainFunc 协程，且 GetMainFiber 存储的也是该协程
+        // swapOut 相当于无效切换
         ASSERT2(false, "execution should never reach here");
     }
 
@@ -158,7 +186,38 @@ namespace svher {
     }
 
     void Fiber::call() {
+        SetThis(this);
+        m_state = EXEC;
+        ASSERT(GetThis() != t_threadFiber);
+        if (swapcontext(&t_threadFiber->m_ctx, &m_ctx)) {
+            ASSERT2(false, "swapcontext");
+        }
+    }
 
+    void Fiber::CallerMainFunc() {
+        Fiber::ptr cur = GetThis();
+        ASSERT(cur);
+        try {
+            cur->m_cb();
+            cur->m_cb = nullptr;
+            cur->m_state = TERM;
+        } catch (std::exception& ex) {
+            cur->m_state = EXCEPT;
+            LOG_ERROR(g_logger) << "Fiber exception: " << ex.what()
+                                << " fiber_id=" << cur->getId()
+                                << std::endl << BacktraceToString();
+        } catch (...) {
+            cur->m_state = EXCEPT;
+            LOG_ERROR(g_logger) << "Fiber exception: ";
+        }
+        // 销毁智能指针
+        auto raw_ptr = cur.get();
+        cur.reset();
+        raw_ptr->callOut();
+
+        // caller 线程调用 MainFunc 协程，且 GetMainFiber 存储的也是该协程
+        // swapOut 相当于无效切换
+        ASSERT2(false, "execution should never reach here");
     }
 }
 
