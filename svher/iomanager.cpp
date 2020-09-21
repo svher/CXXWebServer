@@ -117,8 +117,9 @@ namespace svher {
     }
 
     bool IOManager::cancelEvent(int fd, IOManager::Event event) {
+        LOG_INFO(g_logger) << "Cancel event, fd: " << fd;
         RWMutexType::ReadLock lock(m_mutex);
-        if ((int)m_fdContexts.size() < fd) {
+        if ((int)m_fdContexts.size() <= fd) {
             return false;
         }
         FdContext* fd_ctx = m_fdContexts[fd];
@@ -127,8 +128,10 @@ namespace svher {
         if (!(fd_ctx->events & event)) {
             return false;
         }
+        LOG_INFO(g_logger) << "Cancel event, fd: " << fd;
         Event new_events = (Event)(fd_ctx->events & ~event);
         int op = new_events ? EPOLL_CTL_MOD : EPOLL_CTL_DEL;
+        LOG_INFO(g_logger) << "cancel op: " << op;
         epoll_event epevent;
         epevent.events = EPOLLET | new_events;
         epevent.data.ptr = fd_ctx;
@@ -194,18 +197,34 @@ namespace svher {
             delete[] ptr;
         });
         while (true) {
-            if (stopping()) {
+            uint64_t next_timeout = getNextTimer();
+            if (stopping(next_timeout)) {
                 LOG_INFO(g_logger) << "name=" << getName() << " idle stopping exit";
                 break;
             }
+
             int ret = 0;
             do {
-                static const int MAX_TIMEOUT = 5000;
-                ret = epoll_wait(m_epfd, events, 64, MAX_TIMEOUT);
+                static const int MAX_TIMEOUT = 500;
+                if (next_timeout != -1ull) {
+                    next_timeout = next_timeout > MAX_TIMEOUT ? MAX_TIMEOUT : next_timeout;
+                } else {
+                    next_timeout = MAX_TIMEOUT;
+                }
+                ret = epoll_wait(m_epfd, events, 64, (int)next_timeout);
                 if (!(ret < 0 && errno == EINTR)) {
                     break;
                 }
             } while(true);
+
+            std::vector<std::function<void()>> cbs;
+            listExpiredCb(cbs);
+            if (!cbs.empty()) {
+                LOG_DEBUG(g_logger) << "on timer cbs.size=" << cbs.size();
+                schedule(cbs.begin(), cbs.end());
+                cbs.clear();
+            }
+
             for (int i = 0; i < ret; ++i) {
                 epoll_event& event = events[i];
                 if (event.data.fd == m_tickleFds[0]) {
@@ -257,7 +276,7 @@ namespace svher {
     }
 
     bool IOManager::stopping() {
-        return Scheduler::stopping() && m_pendingEventCount == 0;
+        return false;
     }
 
     void IOManager::tickle() {
@@ -278,9 +297,18 @@ namespace svher {
 
     }
 
+    void IOManager::onTimerInsertedAtFront() {
+        tickle();
+    }
+
+    bool IOManager::stopping(uint64_t timeout) {
+        timeout = getNextTimer();
+        return timeout == -1ull && m_pendingEventCount == 0 && Scheduler::stopping();
+    }
+
     void IOManager::FdContext::triggerEvent(IOManager::Event event) {
         ASSERT(events & event);
-        events = (Event)(event & ~event);
+        events = (Event)(events & ~event);
         EventContext& ctx = getContext(event);
         if (ctx.cb) {
             // 传指针让 ctx.cb 失效

@@ -1,8 +1,9 @@
 #pragma once
 #include "scheduler.h"
+#include "timer.h"
 
 namespace svher {
-    class IOManager : public Scheduler {
+    class IOManager : public Scheduler, public TimerManager {
         struct FdContext;
     public:
         typedef std::shared_ptr<IOManager> ptr;
@@ -22,10 +23,11 @@ namespace svher {
     protected:
         void idle() override;
         bool stopping() override;
+        bool stopping(uint64_t timeout);
         void tickle() override;
         void contextResize(size_t size);
         int m_tickleFds[2]{};
-
+        void onTimerInsertedAtFront() override;
     private:
         int m_epfd = 0;
         std::atomic_size_t m_pendingEventCount{0};

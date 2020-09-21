@@ -17,6 +17,7 @@ set(LIB_SRC
     svher/fiber.cpp
     svher/scheduler.cpp
     svher/iomanager.cpp
+    svher/timer.cpp
     )
 
 set(LIB_DYL

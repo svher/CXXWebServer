@@ -95,9 +95,6 @@ namespace svher {
         for (auto& thread : threads) {
             thread->join();
         }
-        if (stopping()) {
-            return;
-        }
     }
 
     void Scheduler::tickle() {

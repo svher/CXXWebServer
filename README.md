@@ -81,3 +81,6 @@ message_queue (++sem)
    |---- Thread (--sem)
 ```
 
+Timer addTimer() cancel()
+获取当前的定时器离现在的时间差
+返回当前触发的定时器
