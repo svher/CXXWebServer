@@ -34,10 +34,13 @@ namespace svher {
         static void CallerMainFunc();
         static void SetThis(Fiber* f);
         static uint64_t GetFiberId();
+
+        void swapOut();
+
     private:
         Fiber();
         void swapIn();
-        void swapOut();
+
         uint64_t m_id = 0;
         uint32_t m_stacksize = 0;
         State m_state = INIT;

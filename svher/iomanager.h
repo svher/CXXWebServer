@@ -9,8 +9,8 @@ namespace svher {
         typedef RWMutex RWMutexType;
         enum Event {
             NONE = 0,
-            READ = 1,
-            WRITE = 2
+            READ = 1,  // EPOLLIN
+            WRITE = 4  // EPOLLOUT
         };
         IOManager(size_t threads = 1, bool use_caller = true, const std::string& name = "");
         ~IOManager();
@@ -20,16 +20,17 @@ namespace svher {
         bool cancelAll(int fd);
         static IOManager* GetThis();
     protected:
-        bool idle() override;
+        void idle() override;
         bool stopping() override;
         void tickle() override;
         void contextResize(size_t size);
-        int m_tickleFds[2];
+        int m_tickleFds[2]{};
+
+    private:
+        int m_epfd = 0;
         std::atomic_size_t m_pendingEventCount{0};
         RWMutexType m_mutex;
         std::vector<FdContext*> m_fdContexts;
-    private:
-        int m_epfd = 0;
         struct FdContext {
             typedef Mutex MutexType;
             struct EventContext {
@@ -37,11 +38,13 @@ namespace svher {
                 std::shared_ptr<Fiber> fiber;
                 std::function<void()> cb;
             };
+            void triggerEvent(Event event);
             EventContext& getContext(Event event);
+            void resetContext(EventContext& ctx);
             int fd = 0;
             EventContext read;
             EventContext write;
-            Event event = NONE;
+            Event events = NONE;
             MutexType mutex;
         };
     };

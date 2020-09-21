@@ -206,10 +206,9 @@ namespace svher {
         t_scheduler = this;
     }
 
-    bool Scheduler::idle() {
+    void Scheduler::idle() {
         while (!stopping()) {
             Fiber::YieldToHold();
         }
-        return false;
     }
 }

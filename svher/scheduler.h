@@ -43,8 +43,9 @@ namespace svher {
         virtual void tickle();
         void run();
         virtual bool stopping();
-        virtual bool idle();
+        virtual void idle();
         void setThis();
+        bool hasIdleThreads() { return m_idleThreadCount > 0; }
     private:
         template<class T>
         bool scheduleNoLock(T callback, int thread) {
