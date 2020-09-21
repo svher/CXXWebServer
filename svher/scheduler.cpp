@@ -10,6 +10,8 @@ namespace svher {
 
     Scheduler::Scheduler(size_t threads, bool use_caller, const std::string& name) : m_name(name) {
         ASSERT(threads > 0);
+        LOG_INFO(g_logger) << "Scheduler threads_num: " << threads << " use_caller: " << use_caller
+                                << " name: " << name;
         if (use_caller) {
             Fiber::GetThis();
             --threads;
@@ -57,10 +59,6 @@ namespace svher {
             m_threadIds.push_back(m_threads[i]->getId());
         }
         lock.unlock();
-        if (m_rootFiber) {
-            m_rootFiber->call();
-            LOG_INFO(g_logger) << "call out " << m_rootFiber->getState();
-        }
     }
 
     void Scheduler::stop() {
@@ -86,11 +84,17 @@ namespace svher {
         for (size_t i = 0; i < m_threadCount; ++i) {
             tickle();
         }
-
         if (m_rootFiber) {
-            tickle();
+            if (!stopping()) m_rootFiber->call();
         }
-
+        std::vector<Thread::ptr> threads;
+        {
+            MutexType::Lock lock(m_mutex);
+            threads.swap(m_threads);
+        }
+        for (auto& thread : threads) {
+            thread->join();
+        }
         if (stopping()) {
             return;
         }
@@ -114,6 +118,7 @@ namespace svher {
         while (true) {
             ft.reset();
             bool tickle_me = false;
+            bool is_activate = false;
             {
                 MutexType::Lock lock(m_mutex);
                 auto it = m_fibers.begin();
@@ -132,6 +137,8 @@ namespace svher {
                     // 取出一个需要执行的任务
                     ft = *it;
                     m_fibers.erase(it);
+                    ++m_activeThreadCount;
+                    is_activate = true;
                     break;
                 }
             }
@@ -140,7 +147,6 @@ namespace svher {
             }
             if (ft.fiber && ft.fiber->getState() != Fiber::TERM
                     && ft.fiber->getState() != Fiber::EXCEPT) {
-                ++m_activeThreadCount;
                 ft.fiber->swapIn();
                 --m_activeThreadCount;
                 if (ft.fiber->getState() == Fiber::READY) {
@@ -157,7 +163,6 @@ namespace svher {
                     cb_fiber.reset(new Fiber(ft.cb));
                 }
                 ft.reset();
-                ++m_activeThreadCount;
                 cb_fiber->swapIn();
                 --m_activeThreadCount;
                 if (cb_fiber->getState() == Fiber::READY) {
@@ -171,6 +176,11 @@ namespace svher {
                     cb_fiber.reset();
                 }
             } else {
+                // 取出的工作项无效，活跃线程数减一
+                if (is_activate) {
+                    --m_activeThreadCount;
+                    continue;
+                }
                 if (idle_fiber->getState() == Fiber::TERM) {
                     LOG_INFO(g_logger) << "idle fiber term";
                     break;
@@ -197,7 +207,9 @@ namespace svher {
     }
 
     bool Scheduler::idle() {
-        LOG_INFO(g_logger) << "idle";
+        while (!stopping()) {
+            Fiber::YieldToHold();
+        }
         return false;
     }
 }

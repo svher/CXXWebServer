@@ -10,13 +10,13 @@ appender (Journal Output Detination)
 ```
 
 # 配置文件
-
+```c++
 template<T, FromStr, ToStr>
 class ConfigVar
 
 template<F, T>
 class LexicalCast
-
+```
 
 key 相同，类型不同的不会报错
 
@@ -61,8 +61,6 @@ scheduler --1:N-- thread --1:M-- fiber
 1. 线程池，分配一组线程
 2. 协程调度器，将协程指定到线程中执行
 
-<function, fiber, thread> -- fiber
-
 schedule(func/fiber)
 
 1. 设置当前线程的 scheduler
@@ -72,3 +70,14 @@ schedule(func/fiber)
     - 无任务时执行 idle
 
 # socket 函数库
+
+
+```
+IOManager(epoll) ------ idle(epoll_wait)
+
+信号量
+message_queue (++sem)
+   |---- Thread (--sem)
+   |---- Thread (--sem)
+```
+
