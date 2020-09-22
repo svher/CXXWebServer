@@ -36,14 +36,14 @@ namespace svher {
         virtual ~TimerManager();
         Timer::ptr addTimer(uint64_t ms, std::function<void()> cb,
                             bool recurring = false);
-        Timer::ptr addConditionalTimer(uint64_t ms, std::function<void()> cb,
+        Timer::ptr addConditionalTimer(uint64_t ms, const std::function<void()>& cb,
                                        std::weak_ptr<void> weak_cond, bool recurring = false);
         uint64_t getNextTimer();
         void listExpiredCb(std::vector<std::function<void()>>& cbs);
         bool hasTimer();
     protected:
         virtual void onTimerInsertedAtFront() = 0;
-        void addTimer(Timer::ptr timer, RWMutexType::WriteLock& lock);
+        void addTimer(const Timer::ptr& timer, RWMutexType::WriteLock& lock);
     private:
         bool detectClockRollover(uint64_t now_ms);
         RWMutexType m_mutex;

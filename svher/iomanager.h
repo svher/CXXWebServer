@@ -4,7 +4,7 @@
 
 namespace svher {
     class IOManager : public Scheduler, public TimerManager {
-        struct FdContext;
+        struct IOContext;
     public:
         typedef std::shared_ptr<IOManager> ptr;
         typedef RWMutex RWMutexType;
@@ -32,8 +32,8 @@ namespace svher {
         int m_epfd = 0;
         std::atomic_size_t m_pendingEventCount{0};
         RWMutexType m_mutex;
-        std::vector<FdContext*> m_fdContexts;
-        struct FdContext {
+        std::vector<IOContext*> m_fdContexts;
+        struct IOContext {
             typedef Mutex MutexType;
             struct EventContext {
                 Scheduler* scheduler; // 事件执行的 scheduler

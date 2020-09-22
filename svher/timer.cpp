@@ -93,16 +93,16 @@ namespace svher {
         return timer;
     }
 
-    static void OnTimer(std::weak_ptr<void> weak_cond, std::function<void()> cb) {
+    static void OnTimer(const std::weak_ptr<void>& weak_cond, std::function<void()> cb) {
         std::shared_ptr<void> tmp = weak_cond.lock();
         if (tmp) {
             cb();
         }
     }
 
-    Timer::ptr TimerManager::addConditionalTimer(uint64_t ms, std::function<void()> cb, std::weak_ptr<void> weak_cond,
+    Timer::ptr TimerManager::addConditionalTimer(uint64_t ms, const std::function<void()>& cb, std::weak_ptr<void> weak_cond,
                                                  bool recurring) {
-        return addTimer(ms, std::bind(&OnTimer, weak_cond, cb), recurring);
+        return addTimer(ms, [weak_cond, cb] { return OnTimer(weak_cond, cb); }, recurring);
     }
 
     uint64_t TimerManager::getNextTimer() {
@@ -151,7 +151,7 @@ namespace svher {
         }
     }
 
-    void TimerManager::addTimer(Timer::ptr timer, RWMutexType::WriteLock& lock) {
+    void TimerManager::addTimer(const Timer::ptr& timer, RWMutexType::WriteLock& lock) {
         auto it = m_timers.insert(timer).first;
         bool at_front = it == m_timers.begin() && !m_tickled;
         if (at_front) m_tickled = true;

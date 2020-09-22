@@ -1,5 +1,5 @@
 
-# 日志系统
+## 日志系统
 ```
 log4j
 logger (Define Journal Type)
@@ -9,7 +9,7 @@ logger (Define Journal Type)
 appender (Journal Output Detination)
 ```
 
-# 配置文件
+## 配置文件
 ```c++
 template<T, FromStr, ToStr>
 class ConfigVar
@@ -23,11 +23,11 @@ key 相同，类型不同的不会报错
 自定义类型，需要实现偏特化
 实现后，就可以支持 config 解析自定义类型，自定义类型可以和常规 STL 容器一起使用。
 
-# 配置的事件机制
+## 配置的事件机制
 
 当一个配置项发生修改，可以通知运行中的代码
 
-# 日志系统整合
+## 日志系统整合
 ```yaml
 logs:
     - name: root
@@ -45,13 +45,13 @@ LoggerMgr::GetInstance()->getLogger(name)
 LOG_INFO(g_logger) << "xxxx"
 ```
 
-# 线程库
+## 线程库
 Mutex, RWMutex
 
 日志库使用 Spinlock 加锁
 
 
-# 协程库封装
+## 协程库封装
 
 ```
 main_fiber ----- child_fiber
@@ -69,7 +69,7 @@ schedule(func/fiber)
     - 协程消息队列是否有任务
     - 无任务时执行 idle
 
-# socket 函数库
+## socket 函数库
 
 
 ```
@@ -84,3 +84,16 @@ message_queue (++sem)
 Timer addTimer() cancel()
 获取当前的定时器离现在的时间差
 返回当前触发的定时器
+
+```
+    [Fiber]              [Timer]
+       |                    |
+       |                    |
+       |                    |
+    [Thread]          [TimerManager]
+       |                    |
+       |                    |
+  [Scheduler] --------- [IOManager]
+```
+
+## HOOK

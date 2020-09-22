@@ -1,4 +1,5 @@
 #include "scheduler.h"
+#include "hook.h"
 #include "log.h"
 #include "macro.h"
 
@@ -103,6 +104,7 @@ namespace svher {
 
     void Scheduler::run() {
         LOG_INFO(g_logger) << "run";
+        set_hook_enable(true);
         setThis();
         if (GetThreadId() != m_rootThread) {
             t_fiber = Fiber::GetThis().get();

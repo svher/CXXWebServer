@@ -42,7 +42,7 @@ namespace svher {
     }
 
     int IOManager::addEvent(int fd, IOManager::Event event, std::function<void()> cb) {
-        FdContext* fd_ctx = nullptr;
+        IOContext* fd_ctx = nullptr;
         RWMutexType::ReadLock lock(m_mutex);
         if ((int)m_fdContexts.size() > fd) {
             fd_ctx = m_fdContexts[fd];
@@ -52,7 +52,7 @@ namespace svher {
             contextResize(fd * 1.5);
             fd_ctx = m_fdContexts[fd];
         }
-        FdContext::MutexType::Lock lock2(fd_ctx->mutex);
+        IOContext::MutexType::Lock lock2(fd_ctx->mutex);
         if (fd_ctx->events & event) {
             LOG_ERROR(g_logger) << "add duplicate event fd="
                         << fd << " event=" << event
@@ -70,10 +70,11 @@ namespace svher {
                     << op << ", " << fd << ", " << epollEvent.events
                     << "): " << ret << " (" << errno << ", " <<
                     strerror(errno) << ")";
+            return -1;
         }
         ++m_pendingEventCount;
         fd_ctx->events = (Event)(fd_ctx->events | event);
-        FdContext::EventContext& event_ctx = fd_ctx->getContext(event);
+        IOContext::EventContext& event_ctx = fd_ctx->getContext(event);
         ASSERT(!event_ctx.scheduler && !event_ctx.fiber);
         event_ctx.scheduler = Scheduler::GetThis();
         if (cb) {
@@ -90,9 +91,9 @@ namespace svher {
         if ((int)m_fdContexts.size() < fd) {
             return false;
         }
-        FdContext* fd_ctx = m_fdContexts[fd];
+        IOContext* fd_ctx = m_fdContexts[fd];
         lock.unlock();
-        FdContext::MutexType::Lock lock1(fd_ctx->mutex);
+        IOContext::MutexType::Lock lock1(fd_ctx->mutex);
         if (!(fd_ctx->events & event)) {
             return false;
         }
@@ -111,7 +112,7 @@ namespace svher {
         }
         --m_pendingEventCount;
         fd_ctx->events = new_events;
-        FdContext::EventContext& event_ctx = fd_ctx->getContext(event);
+        IOContext::EventContext& event_ctx = fd_ctx->getContext(event);
         fd_ctx->resetContext(event_ctx);
         return true;
     }
@@ -122,9 +123,9 @@ namespace svher {
         if ((int)m_fdContexts.size() <= fd) {
             return false;
         }
-        FdContext* fd_ctx = m_fdContexts[fd];
+        IOContext* fd_ctx = m_fdContexts[fd];
         lock.unlock();
-        FdContext::MutexType::Lock lock1(fd_ctx->mutex);
+        IOContext::MutexType::Lock lock1(fd_ctx->mutex);
         if (!(fd_ctx->events & event)) {
             return false;
         }
@@ -144,7 +145,7 @@ namespace svher {
             return false;
         }
 
-        FdContext::EventContext& event_ctx = fd_ctx->getContext(event);
+        IOContext::EventContext& event_ctx = fd_ctx->getContext(event);
         fd_ctx->triggerEvent(event);
         --m_pendingEventCount;
         fd_ctx->events = new_events;
@@ -157,9 +158,9 @@ namespace svher {
         if ((int)m_fdContexts.size() < fd) {
             return false;
         }
-        FdContext* fd_ctx = m_fdContexts[fd];
+        IOContext* fd_ctx = m_fdContexts[fd];
         lock.unlock();
-        FdContext::MutexType::Lock lock1(fd_ctx->mutex);
+        IOContext::MutexType::Lock lock1(fd_ctx->mutex);
         if (!fd_ctx->events) {
             return false;
         }
@@ -192,7 +193,7 @@ namespace svher {
     }
 
     void IOManager::idle() {
-        epoll_event* events = new epoll_event[64]();
+        auto* events = new epoll_event[64]();
         std::shared_ptr<epoll_event> shared_events(events, [](epoll_event* ptr) {
             delete[] ptr;
         });
@@ -220,7 +221,7 @@ namespace svher {
             std::vector<std::function<void()>> cbs;
             listExpiredCb(cbs);
             if (!cbs.empty()) {
-                LOG_DEBUG(g_logger) << "on timer cbs.size=" << cbs.size();
+//                LOG_DEBUG(g_logger) << "on timer cbs.size=" << cbs.size();
                 schedule(cbs.begin(), cbs.end());
                 cbs.clear();
             }
@@ -233,8 +234,8 @@ namespace svher {
                     while (read(m_tickleFds[0], &dummy, 1) == 1);
                     continue;
                 }
-                FdContext* fd_ctx = (FdContext*)event.data.ptr;
-                FdContext::MutexType::Lock lock(fd_ctx->mutex);
+                auto* fd_ctx = (IOContext*)event.data.ptr;
+                IOContext::MutexType::Lock lock(fd_ctx->mutex);
                 if (event.events & (EPOLLERR | EPOLLHUP)) {
                     event.events |= EPOLLIN | EPOLLOUT;
                 }
@@ -290,7 +291,7 @@ namespace svher {
         m_fdContexts.resize(size);
         for (size_t i = 0; i < m_fdContexts.size(); ++i) {
             if (!m_fdContexts[i]) {
-                m_fdContexts[i] = new FdContext;
+                m_fdContexts[i] = new IOContext;
                 m_fdContexts[i]->fd = i;
             }
         }
@@ -306,7 +307,7 @@ namespace svher {
         return timeout == -1ull && m_pendingEventCount == 0 && Scheduler::stopping();
     }
 
-    void IOManager::FdContext::triggerEvent(IOManager::Event event) {
+    void IOManager::IOContext::triggerEvent(IOManager::Event event) {
         ASSERT(events & event);
         events = (Event)(events & ~event);
         EventContext& ctx = getContext(event);
@@ -320,7 +321,7 @@ namespace svher {
         return;
     }
 
-    IOManager::FdContext::EventContext &IOManager::FdContext::getContext(IOManager::Event event) {
+    IOManager::IOContext::EventContext &IOManager::IOContext::getContext(IOManager::Event event) {
         switch(event) {
             case IOManager::READ:
                 return read;
@@ -331,7 +332,7 @@ namespace svher {
         }
     }
 
-    void IOManager::FdContext::resetContext(IOManager::FdContext::EventContext &ctx) {
+    void IOManager::IOContext::resetContext(IOManager::IOContext::EventContext &ctx) {
         ctx.scheduler = nullptr;
         ctx.fiber.reset();
         ctx.cb = nullptr;
