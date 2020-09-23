@@ -194,7 +194,7 @@ namespace svher {
     public:
         typedef std::shared_ptr<StdOutLogAppender> ptr;
         explicit FileLogAppender(const std::string& filename);
-        virtual void log(std::shared_ptr<Logger> logger, LogLevel::Level level, LogEvent::ptr event) override;
+        void log(std::shared_ptr<Logger> logger, LogLevel::Level level, LogEvent::ptr event) override;
         bool reopen();
         std::string toYamlString() override;
     private:

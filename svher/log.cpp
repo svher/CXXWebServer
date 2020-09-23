@@ -1,5 +1,4 @@
 #include "log.h"
-
 #include "config.h"
 
 namespace svher {
@@ -376,8 +375,7 @@ namespace svher {
                         break;
                     }
                 }
-                ++n;
-            }
+                ++n;}
 
             if (fmt_status == 0) {
                 if (!nstr.empty()) {
@@ -396,7 +394,7 @@ namespace svher {
                     vec.push_back(std::make_tuple(nstr, "", 0));
                     nstr.clear();
                 }
-                vec.push_back(std::make_tuple(str, fmt, 1));
+                vec.emplace_back(str, fmt, 1);
                 i = n;
             }
         }

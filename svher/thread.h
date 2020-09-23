@@ -4,12 +4,13 @@
 #include <memory>
 #include <semaphore.h>
 #include <atomic>
+#include "util.h"
 
 namespace svher {
 
-    class Semaphore {
+    class Semaphore : Noncopyable {
     public:
-        Semaphore(uint32_t count = 0);
+        explicit Semaphore(uint32_t count = 0);
         ~Semaphore();
         void wait();
         void notify();
@@ -23,7 +24,7 @@ namespace svher {
     template<class T>
     struct ScopedLockImpl {
     public:
-        ScopedLockImpl(T& mutex) : m_mutex(mutex) {
+        explicit ScopedLockImpl(T& mutex) : m_mutex(mutex) {
             lock();
         }
         ~ScopedLockImpl() {
@@ -49,7 +50,7 @@ namespace svher {
     template<class T>
     struct ReadScopedLockImpl {
     public:
-        ReadScopedLockImpl(T& mutex) : m_mutex(mutex) {
+        explicit ReadScopedLockImpl(T& mutex) : m_mutex(mutex) {
             lock();
         }
         ~ReadScopedLockImpl() {
@@ -76,7 +77,7 @@ namespace svher {
     template<class T>
     struct WriteScopedLockImpl {
     public:
-        WriteScopedLockImpl(T& mutex) : m_mutex(mutex) {
+        explicit WriteScopedLockImpl(T& mutex) : m_mutex(mutex) {
             lock();
         }
         ~WriteScopedLockImpl() {
@@ -99,7 +100,7 @@ namespace svher {
         bool m_locked = false;
     };
 
-    class Mutex {
+    class Mutex : Noncopyable {
     public:
         typedef ScopedLockImpl<Mutex> Lock;
         Mutex() {
@@ -118,28 +119,28 @@ namespace svher {
         pthread_mutex_t m_mutex;
     };
 
-    class NullMutex {
+    class NullMutex : Noncopyable {
     public:
         typedef ScopedLockImpl<NullMutex> Lock;
-        NullMutex() {}
-        ~NullMutex() {}
+        NullMutex() = default;
+        ~NullMutex() = default;
         void lock() {}
         void unlock() {}
     };
 
-    class NullRWMutex {
+    class NullRWMutex : Noncopyable {
     public:
        typedef ReadScopedLockImpl<NullRWMutex> ReadLock;
        typedef WriteScopedLockImpl<NullRWMutex> WriteLock;
 
-       NullRWMutex() {}
-       ~NullRWMutex() {}
+       NullRWMutex() = default;
+       ~NullRWMutex() = default;
        void rdlock() {}
        void wrlock() {}
        void unlock() {}
     };
 
-    class RWMutex {
+    class RWMutex : Noncopyable {
     public:
         typedef ReadScopedLockImpl<RWMutex> ReadLock;
         typedef WriteScopedLockImpl<RWMutex> WriteLock;
@@ -162,7 +163,7 @@ namespace svher {
         pthread_rwlock_t m_lock;
     };
 
-    class Spinlock {
+    class Spinlock : Noncopyable {
     public:
         typedef ScopedLockImpl<Spinlock> Lock;
         Spinlock() {
@@ -181,15 +182,13 @@ namespace svher {
         pthread_spinlock_t m_mutex;
     };
 
-    class CASLock {
+    class CASLock : Noncopyable {
     public:
         typedef ScopedLockImpl<CASLock> Lock;
         CASLock() {
             m_mutex.clear();
         }
-        ~CASLock() {
-
-        }
+        ~CASLock() = default;
         void lock() {
             // TODO: Memory Order
             while(std::atomic_flag_test_and_set_explicit(&m_mutex, std::memory_order_acquire)) {

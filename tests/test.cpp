@@ -1,7 +1,6 @@
 
 #include <thread>
-#include "log.h"
-#include "util.h"
+#include "webserver.h"
 
 int main(int argc, char ** argv) {
     svher::LogAppender::ptr file_appender(new svher::FileLogAppender("./log.txt"));

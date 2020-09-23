@@ -1,4 +1,5 @@
 #include "fdmanager.h"
+#include "hook.h"
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -25,14 +26,12 @@ namespace svher {
             m_isSocket = S_ISSOCK(fd_stat.st_mode);
         }
         if (m_isSocket) {
-            int flags = fcntl(m_fd, F_GETFL, 0);
+            int flags = fcntl_f(m_fd, F_GETFL, 0);
             if (!(flags & O_NONBLOCK)) {
-                fcntl(m_fd, F_SETFL, flags | O_NONBLOCK);
                 m_sysNonblock = true;
-            } else {
-                m_sysNonblock = false;
             }
-        }
+            fcntl_f(m_fd, F_SETFL, flags | O_NONBLOCK);
+        } else m_sysNonblock = false;
         m_userNonblock = false;
         m_isClosed = false;
         return m_isInit;

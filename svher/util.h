@@ -8,7 +8,6 @@
 #include <cstdint>
 #include <vector>
 #include <string>
-#include "log.h"
 
 namespace svher {
     pid_t GetThreadId();
@@ -17,4 +16,12 @@ namespace svher {
     std::string BacktraceToString(int size = 64, const std::string& prefix = "", int skip = 2);
     uint64_t GetCurrentMS();
     uint64_t GetCurrentUS();
+
+    class Noncopyable {
+    public:
+        Noncopyable() = default;
+        ~Noncopyable() = default;
+        Noncopyable(const Noncopyable&) = delete;
+        Noncopyable& operator=(const Noncopyable&) = delete;
+    };
 }

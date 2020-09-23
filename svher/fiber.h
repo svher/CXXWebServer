@@ -17,7 +17,7 @@ namespace svher {
             READY,
             EXCEPT
         };
-        Fiber(std::function<void()> cb, size_t stacksize = 0, bool use_caller = false);
+        explicit Fiber(std::function<void()> cb, size_t stacksize = 0, bool use_caller = false);
         ~Fiber();
         // INIT TERM 可调用此函数
         void reset(std::function<void()> cb);

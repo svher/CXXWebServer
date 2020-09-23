@@ -1,6 +1,5 @@
-#include "config.h"
-#include "log.h"
 #include <yaml-cpp/yaml.h>
+#include "webserver.h"
 
 svher::ConfigVar<int>::ptr g_int_value_config = svher::Config::Lookup<int>("system.port", (int)8080, "system port");
 svher::ConfigVar<std::vector<int>>::ptr g_int_vec_config = svher::Config::Lookup<std::vector<int>>("system.int_vec", std::vector<int>{1, 2}, "system int vector");

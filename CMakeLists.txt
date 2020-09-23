@@ -4,10 +4,11 @@ project(webserver)
 include (cmake/utils.cmake)
 
 set(CMAKE_VERBOSE_MAKEFILE ON)
-set(CMAKE_CXX_FLAGS "-rdynamic -g -std=c++11 -Wall -Wno-deprecated -Werror -Wno-builtin-macro-redefined")
+set(CMAKE_CXX_FLAGS "$ENV{CXX_FLAGS} -rdynamic -g -std=c++11 -Wall -Wno-deprecated -Werror -Wno-builtin-macro-redefined")
 set(CMAKE_CXX_STANDARD 14)
 
-include_directories(svher)
+# 注意这里不要 include_directories(svher)，不然如果自己的文件和库文件重名，会导致 include 错误 !!!
+include_directories(.)
 include_directories(/usr/include)
 
 set(LIB_SRC
@@ -21,6 +22,7 @@ set(LIB_SRC
     svher/timer.cpp
     svher/hook.cpp
     svher/fdmanager.cpp
+    svher/address.cpp
     )
 
 set(LIB_DYL

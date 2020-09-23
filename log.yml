@@ -11,3 +11,5 @@ logs:
       - type: FileLogAppender
         file: system.txt
       - type: StdoutLogAppender
+  # disable sys.fiber logger
+  - name: sys.fiber

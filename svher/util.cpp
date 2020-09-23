@@ -1,9 +1,10 @@
-#include "util.h"
-#include "fiber.h"
-#include "macro.h"
 #include <execinfo.h>
 #include <ctime>
 #include <sys/time.h>
+#include "util.h"
+#include "fiber.h"
+#include "macro.h"
+#include "log.h"
 
 namespace svher {
     static Logger::ptr g_logger = LOG_NAME("sys");

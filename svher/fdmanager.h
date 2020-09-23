@@ -9,7 +9,7 @@ namespace svher {
     class FdContext : public std::enable_shared_from_this<FdContext> {
     public:
         typedef std::shared_ptr<FdContext> ptr;
-        FdContext(int fd);
+        explicit FdContext(int fd);
         ~FdContext();
 
         bool init();

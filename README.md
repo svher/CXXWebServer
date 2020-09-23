@@ -1,3 +1,4 @@
+[TOC]
 
 ## 日志系统
 ```
@@ -97,3 +98,19 @@ Timer addTimer() cancel()
 ```
 
 ## HOOK
+
+
+socket 相关函数
+socket, connect, accept
+read, write, send, recv
+fcntl, ioctl
+
+## Socket
+
+```
+            Socket
+               |
+            Address ------ [ IPAddress ] --- [ IPv4 ]
+               |                            |
+        [ Unix Address]                     |- [ IPv6 ]
+```

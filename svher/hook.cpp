@@ -7,6 +7,7 @@
 #include "iomanager.h"
 #include "fiber.h"
 #include "log.h"
+#include "config.h"
 
 namespace svher {
 
@@ -35,6 +36,8 @@ namespace svher {
     XX(getsockopt) \
     XX(setsockopt)
 
+    static svher::ConfigVar<int>::ptr g_tcp_connect_timeout =
+            Config::Lookup("tcp.connect.timeout", 5000, "tcp connect timeout");
     static thread_local bool t_hook_enable = false;
     bool is_hook_enable() {
         return t_hook_enable;
@@ -56,9 +59,17 @@ namespace svher {
 #undef XX
     }
 
+    static uint64_t s_connect_timeout = -1;
+
     struct HookIniter {
         HookIniter() {
             hook_init();
+            s_connect_timeout = g_tcp_connect_timeout->getValue();
+            g_tcp_connect_timeout->addListener([](const int& old_value, const int& new_value){
+                LOG_INFO(g_logger) << "tcp connect timeout changed from " << old_value
+                                    << " to " << new_value;
+                s_connect_timeout = new_value;
+            });
         }
     };
 
@@ -75,6 +86,7 @@ namespace svher {
         if (!svher::t_hook_enable) {
             return func(fd, std::forward<Args>(args)...);
         }
+
         FdContext::ptr ctx = svher::FdMgr::GetInstance()->get(fd);
         if (!ctx) {
             return func(fd, std::forward<Args>(args)...);
@@ -83,6 +95,8 @@ namespace svher {
             errno = EBADF;
             return -1;
         }
+        // 由于我们是把同步转异步，所以如果用户主动设置了非阻塞
+        // 和我们默认设置的 Nonblock 行为一致，不需要处理
         if (!ctx->isSocket() || ctx->getUserNonblock()) {
             return func(fd, std::forward<Args>(args)...);
         }
@@ -95,6 +109,7 @@ namespace svher {
             n = func(fd, std::forward<Args>(args)...);
         }
         if (n == -1 && errno == EAGAIN) {
+            LOG_DEBUG(g_logger) << "do_io<" << hook_func_name << ">";
             IOManager* ioManager = IOManager::GetThis();
             Timer::ptr timer;
             std::weak_ptr<timer_info> winfo(tinfo);
@@ -172,6 +187,7 @@ extern "C" {
     }
 
     int socket(int domain, int type, int protocol) {
+        LOG_INFO(svher::g_logger) << "socket hook, socket_f: " << (void*)socket_f;
         if (!svher::t_hook_enable) {
             return socket_f(domain, type, protocol);
         }
@@ -185,6 +201,7 @@ extern "C" {
         if (!svher::t_hook_enable) {
             return connect_f(sockfd, addr, addrlen);
         }
+
         svher::FdContext::ptr ctx = svher::FdMgr::GetInstance()->get(sockfd);
         if (!ctx || ctx->isClosed()) {
             errno = EBADF;
@@ -239,7 +256,7 @@ extern "C" {
     }
 
     int connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen) {
-        return connect_f(sockfd, addr, addrlen);
+        return connect_with_timeout(sockfd, addr, addrlen, svher::s_connect_timeout);
     }
 
     int accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen) {
@@ -329,6 +346,7 @@ extern "C" {
                     return fcntl_f(fd, cmd, arg);
                 }
                 ctx->setUserNonblock(arg & O_NONBLOCK);
+                // 忽略用户主动设置的 Nonblock 标志位
                 if (ctx->getSysNonblock()) {
                     arg |= O_NONBLOCK;
                 } else {
@@ -397,6 +415,7 @@ extern "C" {
         void* arg = va_arg(va, void*);
         va_end(va);
         if (request == FIONBIO) {
+            // true: 允许非阻塞
             bool user_nonblock = !!*(int*)arg;
             svher::FdContext::ptr ctx = svher::FdMgr::GetInstance()->get(fd);
             if (!ctx || ctx->isClosed() || ctx->isSocket()) {

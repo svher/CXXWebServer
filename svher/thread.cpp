@@ -6,7 +6,7 @@
 
 namespace svher {
     static thread_local Thread* t_thread = nullptr;
-    static thread_local std::string t_thread_name = "UNKNOWN";
+    static thread_local std::string t_thread_name = "unk_thread";
 
     static Logger::ptr g_logger = LOG_NAME("sys");
 

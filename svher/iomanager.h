@@ -13,7 +13,7 @@ namespace svher {
             READ = 1,  // EPOLLIN
             WRITE = 4  // EPOLLOUT
         };
-        IOManager(size_t threads = 1, bool use_caller = true, const std::string& name = "");
+        IOManager(size_t threads = 1, bool use_caller = true, const std::string& name = "io_routine");
         ~IOManager();
         int addEvent(int fd, Event event, std::function<void()> cb = nullptr);
         bool delEvent(int fd, Event event);
@@ -32,11 +32,11 @@ namespace svher {
         int m_epfd = 0;
         std::atomic_size_t m_pendingEventCount{0};
         RWMutexType m_mutex;
-        std::vector<IOContext*> m_fdContexts;
+        std::vector<IOContext*> m_ioContexts;
         struct IOContext {
             typedef Mutex MutexType;
             struct EventContext {
-                Scheduler* scheduler; // 事件执行的 scheduler
+                Scheduler* scheduler = nullptr; // 事件执行的 scheduler
                 std::shared_ptr<Fiber> fiber;
                 std::function<void()> cb;
             };

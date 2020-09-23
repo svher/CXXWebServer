@@ -20,11 +20,11 @@ namespace svher {
     class ConfigVarBase {
     public:
         typedef std::shared_ptr<ConfigVarBase> ptr;
-        ConfigVarBase(const std::string& name, const std::string& description = "")
+        explicit ConfigVarBase(const std::string& name, const std::string& description = "")
             : m_name(name), m_description(description) {
             std::transform(m_name.begin(), m_name.end(), m_name.begin(), ::tolower);
         }
-        virtual ~ConfigVarBase() {}
+        virtual ~ConfigVarBase() = default;
         const std::string& getName() const { return m_name; }
         const std::string& getDescription() const { return m_description; }
         virtual std::string toString() = 0;
