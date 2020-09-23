@@ -11,7 +11,7 @@ namespace svher {
 
     Scheduler::Scheduler(size_t threads, bool use_caller, const std::string& name) : m_name(name) {
         ASSERT(threads > 0);
-        LOG_INFO(g_logger) << "Scheduler threads_num: " << threads << " use_caller: " << use_caller
+        LOG_DEBUG(g_logger) << "Scheduler threads_num: " << threads << " use_caller: " << use_caller
                                 << " name: " << name;
         if (use_caller) {
             Fiber::GetThis();
@@ -67,11 +67,11 @@ namespace svher {
         if (m_rootFiber && m_threadCount == 0
             && (m_rootFiber->getState() == Fiber::TERM
             || m_rootFiber->getState() == Fiber::INIT)) {
-            LOG_INFO(g_logger) << this->m_name << " stopped";
             m_stopping = true;
 
             // use_caller 且只有线程
             if (stopping()) {
+                LOG_DEBUG(g_logger) << this->m_name << " stopped";
                 return;
             }
         }
@@ -99,18 +99,17 @@ namespace svher {
     }
 
     void Scheduler::tickle() {
-        LOG_INFO(g_logger) << "tickle";
+        LOG_DEBUG(g_logger) << "tickle";
     }
 
     void Scheduler::run() {
-        LOG_INFO(g_logger) << "run";
+        LOG_DEBUG(g_logger) << "run";
         set_hook_enable(true);
         setThis();
         if (GetThreadId() != m_rootThread) {
             t_fiber = Fiber::GetThis().get();
         }
         Fiber::ptr idle_fiber(new Fiber(std::bind(&Scheduler::idle, this)));
-        LOG_INFO(g_logger) << "init idle fiber, id: " << idle_fiber->getId();
         Fiber::ptr cb_fiber;
 
         FiberAndThread ft;

@@ -1,5 +1,6 @@
 #include "log.h"
 #include "config.h"
+#include "hook.h"
 
 namespace svher {
 
@@ -31,6 +32,9 @@ namespace svher {
     LogEvent::~LogEvent() {
 
     }
+
+    static typename ConfigVar<bool>::ptr g_log_root_fallback = Config::Lookup("config.log.root_fallback", true, "config log root fallback");
+    static bool s_log_root_fallback = true;
 
     void LogEvent::format(const char *fmt, ...) {
         va_list args;
@@ -199,7 +203,7 @@ namespace svher {
     }
 
     void Logger::log(LogLevel::Level level, const LogEvent::ptr event) {
-        if (level >= m_level) {
+        if (!m_disabled && level >= m_level) {
             auto self = shared_from_this();
             MutexType::Lock lock(m_mutex);
             if (!m_appenders.empty()) {
@@ -207,7 +211,7 @@ namespace svher {
                     i->log(self, level, event);
                 }
             }
-            else if (m_root) {
+            else if (m_root && (m_defined || s_log_root_fallback)) {
                 m_root->log(level, event);
             }
         }
@@ -295,6 +299,12 @@ namespace svher {
         std::stringstream ss;
         ss << node;
         return ss.str();
+    }
+
+    // 注意析构函数的顺序
+    FileLogAppender::~FileLogAppender() {
+        set_hook_enable(false);
+        if (m_filestream) m_filestream.close();
     }
 
     std::string StdOutLogAppender::toYamlString() {
@@ -461,6 +471,8 @@ namespace svher {
 
     LoggerManager::LoggerManager() {
         m_root.reset(new Logger());
+        m_root->m_disabled = false;
+        m_root->m_defined = true;
         m_root->addAppender(LogAppender::ptr(new StdOutLogAppender));
         m_loggers[m_root->m_name] = m_root;
         init();
@@ -492,6 +504,7 @@ namespace svher {
         LogLevel::Level level = LogLevel::UNKNOWN;
         std::string formatter;
         std::vector<LogAppenderDefine> appenders;
+        bool disabled;
         bool operator==(const LogDefine& oth) const {
             return name == oth.name && level == oth.level && formatter == oth.formatter && appenders == oth.appenders;
         }
@@ -550,6 +563,10 @@ namespace svher {
                 ld.level = LogLevel::FromString(n["level"].IsDefined() ? n["level"].as<std::string>() : "");
                 if (n["formatter"].IsDefined())
                     ld.formatter = n["formatter"].as<std::string>();
+                if (n["disabled"].IsDefined())
+                    ld.disabled = n["disabled"].as<bool>();
+                else
+                    ld.disabled = false;
                 if (n["appenders"].IsDefined()) {
                     for (size_t x = 0; x < n["appenders"].size(); ++x) {
                         auto a = n["appenders"][x];
@@ -624,7 +641,6 @@ namespace svher {
         LogIniter() {
             g_log_defines->addListener([](const std::set<LogDefine>& old_value, const std::set<LogDefine>& new_value){
                 // 新增日志 修改日志 删除日志
-                LOG_INFO(LOG_ROOT()) << "on_log_conf_changed";
                 for (auto& i : new_value) {
                     auto it = old_value.find(i);
                     Logger::ptr logger;
@@ -638,6 +654,8 @@ namespace svher {
                         }
                     }
                     logger->setLevel(i.level);
+                    logger->m_disabled = i.disabled;
+                    logger->m_defined = true;
                     if (!i.formatter.empty()) {
                         logger->setFormatter(i.formatter);
                     }
@@ -665,10 +683,15 @@ namespace svher {
                     if (it != new_value.end()) {
                         // 删除 logger
                         auto logger = LOG_NAME(i.name);
-                        logger->setLevel((LogLevel::Level)100);
+                        logger->m_disabled = true;
+                        logger->m_defined = false;
                         logger->clearAppenders();
                     }
                 }
+            });
+            g_log_root_fallback->addListener([](const bool& old_value, const bool& new_value) {
+               if (s_log_root_fallback != new_value)
+                   s_log_root_fallback = new_value;
             });
         }
     };

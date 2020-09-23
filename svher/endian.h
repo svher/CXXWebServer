@@ -26,23 +26,13 @@ namespace svher {
     // 如果本来是大端则不需要做转化，否则做 byteswap
 #if BYTE_ORDER == BIG_ENDIAN
     template <class T>
-    T byteswapToBigEndian(T t) {
+    T byteswap_t(T t) {
         return t;
-    }
-
-    template <class T>
-    T byteswaptoLittleEndian(T t) {
-        return byteswap(t);
     }
 #else
     template <class T>
-    T byteswapToBigEndian(T t) {
+    T byteswap_t(T t) {
         return byteswap(t);
-    }
-
-    template <class T>
-    T byteswaptoLittleEndian(T t) {
-        return t;
     }
 #endif
 }

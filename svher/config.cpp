@@ -2,7 +2,7 @@
 
 namespace svher {
     static void ListAllMember(const std::string& prefix, const YAML::Node& node, std::list<std::pair<std::string, YAML::Node>>& output) {
-        if (prefix.find_first_not_of("abcdedghijklmnopqrstuvwxyz._0123456789") != std::string::npos) {
+        if (prefix.find_first_not_of("abcdefdghijklmnopqrstuvwxyz._0123456789") != std::string::npos) {
             LOG_ERROR(LOG_ROOT()) << "Config invalid name: " << prefix << " : " << node;
             return;
         }

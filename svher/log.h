@@ -154,6 +154,7 @@ namespace svher {
     // 日志输出器
     class Logger : public std::enable_shared_from_this<Logger> {
         friend class LoggerManager;
+        friend struct LogIniter;
     public:
         typedef std::shared_ptr<Logger> ptr;
         explicit Logger(const std::string& name = "root");
@@ -176,6 +177,8 @@ namespace svher {
     private:
         MutexType m_mutex;
         std::string m_name;
+        bool m_disabled = false;
+        bool m_defined = false;
         LogLevel::Level m_level = LogLevel::DEBUG;
         std::list<LogAppender::ptr> m_appenders;
         LogFormatter::ptr m_formatter;
@@ -194,6 +197,7 @@ namespace svher {
     public:
         typedef std::shared_ptr<StdOutLogAppender> ptr;
         explicit FileLogAppender(const std::string& filename);
+        ~FileLogAppender();
         void log(std::shared_ptr<Logger> logger, LogLevel::Level level, LogEvent::ptr event) override;
         bool reopen();
         std::string toYamlString() override;

@@ -7,11 +7,21 @@
 #include <sys/un.h>
 #include <netinet/in.h>
 #include <iostream>
+#include <vector>
+#include <map>
 
 namespace svher {
+    class IPAddress;
     class Address {
     public:
         typedef std::shared_ptr<Address> ptr;
+        static Address::ptr Create(const sockaddr* addr, socklen_t addrlen);
+        static bool Lookup(std::vector<Address::ptr>& results, const std::string& host,
+                           int family = AF_UNSPEC, int type = 0, int protocol = 0);
+        static Address::ptr LookupAny(const std::string& host, int family = AF_UNSPEC, int type = 0, int protocol = 0);
+        static std::shared_ptr<IPAddress> LookupAnyIPAddress(const std::string& host, int family = AF_UNSPEC, int type = 0, int protocol = 0);
+        static bool GetInterfaceAddresses(std::multimap<std::string, std::pair<Address::ptr, uint32_t>>& results, int family = AF_UNSPEC);
+        static bool GetInterfaceAddresses(std::vector<std::pair<Address::ptr, uint32_t>>& results, const std::string& iface, int family = AF_UNSPEC);
         virtual ~Address() = default;
         int getFamily() const;
 
@@ -30,6 +40,7 @@ namespace svher {
     class IPAddress : public Address {
     public:
         typedef std::shared_ptr<IPAddress> ptr;
+        static IPAddress::ptr Create(const char* address, uint32_t port = 0);
         virtual IPAddress::ptr broadcastAddress(uint32_t prefix_len) = 0;
         virtual IPAddress::ptr networkAddress(uint32_t prefix_len) = 0;
         virtual IPAddress::ptr subnetMask(uint32_t prefix_len) = 0;
@@ -40,6 +51,9 @@ namespace svher {
     class IPv4Address : public IPAddress {
     public:
         typedef std::shared_ptr<IPv4Address> ptr;
+
+        static IPv4Address::ptr Create(const char* addr, uint32_t port);
+
         IPv4Address(const sockaddr_in& addr) : m_addr(addr) {};
         IPv4Address(uint32_t address = INADDR_ANY, uint32_t port = 0);
 
@@ -59,8 +73,12 @@ namespace svher {
     class IPv6Address : public IPAddress {
     public:
         typedef std::shared_ptr<IPv6Address> ptr;
+
+        static IPv6Address::ptr Create(const char* addr, uint32_t port);
+
         IPv6Address();
-        IPv6Address(const char *address, uint32_t port = 0);
+        IPv6Address(const sockaddr_in6 &addr) : m_addr(addr) {};
+        IPv6Address(const uint8_t *address, uint32_t port = 0);
 
         const sockaddr* getAddr() const override;
         socklen_t getAddrLen() const override;
@@ -93,6 +111,7 @@ namespace svher {
     public:
         typedef std::shared_ptr<UnknownAddress> ptr;
         UnknownAddress(int family);
+        UnknownAddress(const sockaddr& addr);
 
         const sockaddr* getAddr() const override;
         socklen_t getAddrLen() const override;

@@ -51,6 +51,7 @@ int main(int argc, char** argv) {
 //    test_sock();
     YAML::Node root = YAML::LoadFile("../log.yml");
     svher::Config::LoadFromYaml(root);
+    std::cout << svher::LoggerMgr().GetInstance()->toYamlString() << std::endl;
     svher::IOManager ioManager;
     // schedule 相当于创建一个协程，后面异步请求相当于把该协程作为一个工作项
     ioManager.schedule(test_sock);

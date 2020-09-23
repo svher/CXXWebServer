@@ -187,7 +187,6 @@ extern "C" {
     }
 
     int socket(int domain, int type, int protocol) {
-        LOG_INFO(svher::g_logger) << "socket hook, socket_f: " << (void*)socket_f;
         if (!svher::t_hook_enable) {
             return socket_f(domain, type, protocol);
         }
@@ -423,7 +422,7 @@ extern "C" {
             }
             ctx->setUserNonblock(user_nonblock);
         }
-        return ioctl(fd, request, arg);
+        return ioctl_f(fd, request, arg);
     }
 
     int getsockopt(int sockfd, int level, int optname, void *optval, socklen_t *optlen) {

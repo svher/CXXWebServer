@@ -1,6 +1,6 @@
 logs:
   - name: root
-    level: INFO
+    level: DEBUG
     appenders:
       - type: FileLogAppender
         file: root.txt
@@ -11,5 +11,9 @@ logs:
       - type: FileLogAppender
         file: system.txt
       - type: StdoutLogAppender
-  # disable sys.fiber logger
+    disabled: false
   - name: sys.fiber
+    disabled: true
+config:
+  log:
+    root_fallback: 0

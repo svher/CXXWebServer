@@ -64,8 +64,6 @@ namespace svher {
         epollEvent.events = EPOLLET | ioCtx->events | event;
         epollEvent.data.ptr = ioCtx;
 
-        LOG_DEBUG(g_logger) << "addEvent event=" << event;
-
         int ret = epoll_ctl(m_epfd, op, fd, &epollEvent);
         if (ret) {
             LOG_ERROR(g_logger) << "epoll_ctl(" << m_epfd << ", "
@@ -202,7 +200,7 @@ namespace svher {
         while (true) {
             uint64_t next_timeout = getNextTimer();
             if (stopping(next_timeout)) {
-                LOG_INFO(g_logger) << "name=" << getName() << " idle stopping exit";
+                LOG_DEBUG(g_logger) << "name=" << getName() << " idle stopping exit";
                 break;
             }
 
