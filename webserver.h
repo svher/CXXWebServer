@@ -12,3 +12,5 @@
 #include "svher/timer.h"
 #include "svher/hook.h"
 #include "svher/address.h"
+#include "svher/socket.h"
+#include "svher/bytearray.h"

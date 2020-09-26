@@ -23,6 +23,8 @@ set(LIB_SRC
     svher/hook.cpp
     svher/fdmanager.cpp
     svher/address.cpp
+    svher/socket.cpp
+    svher/bytearray.cpp
     )
 
 set(LIB_DYL
@@ -41,7 +43,9 @@ my_add_executable(test_fiber "tests/test_fiber.cpp" webserver "${LIB_DYL}")
 my_add_executable(test_iomanager "tests/test_iomanager.cpp" webserver "${LIB_DYL}")
 my_add_executable(test_hook "tests/test_hook.cpp" webserver "${LIB_DYL}")
 my_add_executable(test_address "tests/test_address.cpp" webserver "${LIB_DYL}")
+my_add_executable(test_socket "tests/test_socket.cpp" webserver "${LIB_DYL}")
 
+my_add_executable(test_bytearray "tests/test_bytearray.cpp" webserver "${LIB_DYL}")
 
 set(EXECUTABLE_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/bin)
 set(LIBRARY_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/lib)

@@ -113,4 +113,11 @@ fcntl, ioctl
             Address ------ [ IPAddress ] --- [ IPv4 ]
                |                            |
         [ Unix Address]                     |- [ IPv6 ]
+
+connect, accept, read, write, close
 ```
+
+## 序列化
+
+write(int, float, int64, ...)
+read(int, float, int64, ...)

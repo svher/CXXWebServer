@@ -211,14 +211,14 @@ namespace svher {
         return true;
     }
 
-    IPv4Address::IPv4Address(uint32_t address, uint32_t port) {
+    IPv4Address::IPv4Address(uint32_t address, uint16_t port) {
         memset(&m_addr, 0, sizeof(m_addr));
         m_addr.sin_family = AF_INET;
         m_addr.sin_port = byteswap_t(port);
         m_addr.sin_addr.s_addr = byteswap_t(address);
     }
 
-    const sockaddr *IPv4Address::getAddr() const {
+    sockaddr *IPv4Address::getAddr() const {
         return (sockaddr*)&m_addr;
     }
 
@@ -231,8 +231,9 @@ namespace svher {
         os << ((addr >> 24) & 0xff) << "."
             << ((addr >> 16) & 0xff) << "."
             << ((addr >> 8) & 0xff) << "."
-            << (addr & 0xff) << ":";
-        os << byteswap_t(m_addr.sin_port);
+            << (addr & 0xff);
+        if (m_addr.sin_port)
+            os << ':' << byteswap_t(m_addr.sin_port);
         return os;
     }
 
@@ -264,11 +265,11 @@ namespace svher {
         return byteswap_t(m_addr.sin_port);
     }
 
-    void IPv4Address::setPort(uint32_t v) {
+    void IPv4Address::setPort(uint16_t v) {
         m_addr.sin_port = byteswap_t(v);
     }
 
-    IPv4Address::ptr IPv4Address::Create(const char *addr, uint32_t port) {
+    IPv4Address::ptr IPv4Address::Create(const char *addr, uint16_t port) {
         IPv4Address::ptr ret(new IPv4Address);
         ret->m_addr.sin_port = byteswap_t(port);
         int result = inet_pton(AF_INET, addr, &ret->m_addr.sin_addr);
@@ -286,14 +287,14 @@ namespace svher {
         m_addr.sin6_family = AF_INET6;
     }
 
-    IPv6Address::IPv6Address(const uint8_t *address, uint32_t port) {
+    IPv6Address::IPv6Address(const uint8_t *address, uint16_t port) {
         memset(&m_addr, 0, sizeof(m_addr));
         m_addr.sin6_family = AF_INET6;
         m_addr.sin6_port = byteswap_t(port);
         memcpy(&m_addr.sin6_addr.s6_addr, address, 16);
     }
 
-    const sockaddr *IPv6Address::getAddr() const {
+    sockaddr *IPv6Address::getAddr() const {
         return (sockaddr*)&m_addr;
     }
 
@@ -323,7 +324,9 @@ namespace svher {
         if (!used_zeros && addr[7] == 0) {
             os << "::";
         }
-        os << "]:" << byteswap_t(m_addr.sin6_port);
+        os << ']';
+        if (m_addr.sin6_port)
+            os << ':' << byteswap_t(m_addr.sin6_port);
         return os;
     }
 
@@ -360,11 +363,11 @@ namespace svher {
         return byteswap_t(m_addr.sin6_port);
     }
 
-    void IPv6Address::setPort(uint32_t v) {
+    void IPv6Address::setPort(uint16_t v) {
         m_addr.sin6_port = byteswap_t(v);
     }
 
-    IPv6Address::ptr IPv6Address::Create(const char *addr, uint32_t port) {
+    IPv6Address::ptr IPv6Address::Create(const char *addr, uint16_t port) {
         IPv6Address::ptr ret(new IPv6Address);
         ret->m_addr.sin6_port = byteswap_t(port);
         int result = inet_pton(AF_INET6, addr, &ret->m_addr.sin6_addr);
@@ -400,7 +403,7 @@ namespace svher {
         m_length += offsetof(sockaddr_un, sun_path);
     }
 
-    const sockaddr *UnixAddress::getAddr() const {
+    sockaddr *UnixAddress::getAddr() const {
         return (sockaddr*)&m_addr;
     }
 
@@ -417,14 +420,18 @@ namespace svher {
         return os << m_addr.sun_path;
     }
 
+    void UnixAddress::setAddrLen(socklen_t v) {
+        m_length = v;
+    }
+
 
     UnknownAddress::UnknownAddress(int family) {
         memset(&m_addr, 0, sizeof(m_addr));
         m_addr.sa_family = family;
     }
 
-    const sockaddr *UnknownAddress::getAddr() const {
-        return &m_addr;
+    sockaddr *UnknownAddress::getAddr() const {
+        return (sockaddr*)&m_addr;
     }
 
     socklen_t UnknownAddress::getAddrLen() const {
@@ -440,7 +447,7 @@ namespace svher {
         m_addr = addr;
     }
 
-    IPAddress::ptr IPAddress::Create(const char *address, uint32_t port) {
+    IPAddress::ptr IPAddress::Create(const char *address, uint16_t port) {
         addrinfo hints, *results;
         memset(&hints, 0, sizeof(hints));
 //        hints.ai_flags = AI_NUMERICHOST;
